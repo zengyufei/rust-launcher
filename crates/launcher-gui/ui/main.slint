@@ -1,0 +1,156 @@
+import { Button, HorizontalBox, ListView, VerticalBox } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    width: 1040px;
+    height: 680px;
+    title: "Rust Launcher";
+
+    in property <string> data-dir;
+    in property <[string]> plan-names;
+    in property <[string]> launch-modes;
+    in property <string> plan-details;
+    in property <string> status;
+
+    callback refresh();
+    callback run-dry();
+
+    background: #f7f8fb;
+
+    VerticalBox {
+        padding: 18px;
+        spacing: 14px;
+
+        VerticalBox {
+            spacing: 10px;
+            VerticalBox {
+                spacing: 4px;
+                Text {
+                    text: "Rust Launcher";
+                    font-size: 28px;
+                    font-weight: 700;
+                    color: #182033;
+                }
+                Text {
+                    text: root.data-dir;
+                    font-size: 13px;
+                    color: #60708a;
+                }
+            }
+
+            HorizontalBox {
+                spacing: 8px;
+                Button {
+                    text: "刷新";
+                    clicked => { root.refresh(); }
+                }
+                Button {
+                    text: "Dry Run";
+                    clicked => { root.run-dry(); }
+                }
+            }
+        }
+
+        HorizontalBox {
+            spacing: 14px;
+
+            Rectangle {
+                width: 260px;
+                background: white;
+                border-color: #dbe2ee;
+                border-width: 1px;
+                border-radius: 8px;
+
+                VerticalBox {
+                    padding: 12px;
+                    spacing: 10px;
+                    Text {
+                        text: "方案";
+                        font-size: 17px;
+                        font-weight: 700;
+                        color: #182033;
+                    }
+                    ListView {
+                        for name in root.plan-names: Rectangle {
+                            height: 34px;
+                            Text {
+                                text: name;
+                                color: #263247;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: 430px;
+                background: white;
+                border-color: #dbe2ee;
+                border-width: 1px;
+                border-radius: 8px;
+
+                VerticalBox {
+                    padding: 12px;
+                    spacing: 10px;
+                    Text {
+                        text: "结构预览";
+                        font-size: 17px;
+                        font-weight: 700;
+                        color: #182033;
+                    }
+                    Text {
+                        text: root.plan-details;
+                        font-size: 13px;
+                        color: #263247;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            Rectangle {
+                background: white;
+                border-color: #dbe2ee;
+                border-width: 1px;
+                border-radius: 8px;
+
+                VerticalBox {
+                    padding: 12px;
+                    spacing: 10px;
+                    Text {
+                        text: "启动方式";
+                        font-size: 17px;
+                        font-weight: 700;
+                        color: #182033;
+                    }
+                    ListView {
+                        for mode in root.launch-modes: Rectangle {
+                            height: 34px;
+                            Text {
+                                text: mode;
+                                color: #263247;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            height: 74px;
+            background: #eef4ff;
+            border-color: #c8d9f5;
+            border-width: 1px;
+            border-radius: 8px;
+
+            Text {
+                x: 14px;
+                y: 12px;
+                width: parent.width - 28px;
+                text: root.status;
+                color: #1f3b64;
+                wrap: word-wrap;
+            }
+        }
+    }
+}

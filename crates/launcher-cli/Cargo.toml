@@ -1,0 +1,15 @@
+[package]
+name = "launcher-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "launcher"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+launcher-core.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

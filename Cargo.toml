@@ -1,0 +1,25 @@
+[workspace]
+members = [
+    "crates/launcher-core",
+    "crates/launcher-cli",
+    "crates/launcher-gui",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+chrono = { version = "0.4", features = ["clock", "serde"] }
+clap = { version = "4.5", features = ["derive"] }
+launcher-core = { path = "crates/launcher-core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+slint = "1.16"
+slint-build = "1.16"
+tempfile = "3.15"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

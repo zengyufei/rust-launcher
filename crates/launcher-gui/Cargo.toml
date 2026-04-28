@@ -1,0 +1,17 @@
+[package]
+name = "launcher-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "launcher-gui"
+path = "src/main.rs"
+
+[dependencies]
+launcher-core.workspace = true
+slint.workspace = true
+
+[build-dependencies]
+slint-build.workspace = true

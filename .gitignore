@@ -1,0 +1,8 @@
+/.omx/
+/design-exports/
+/data/
+/target/
+/.idea/
+/.vscode/
+*.pdb
+*.log
