@@ -142,7 +142,15 @@ enum ScheduleCommand {
 
 #[derive(Debug, Subcommand)]
 enum SequenceCommand {
-    List { plan_id: String },
+    List {
+        plan_id: String,
+    },
+    Move {
+        plan_id: String,
+        node_id: String,
+        #[arg(value_enum)]
+        direction: MoveDirection,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -219,6 +227,63 @@ enum ItemCommand {
         options: ItemOptions,
     },
     Delete {
+        plan_id: String,
+        item_id: String,
+    },
+    Edit {
+        plan_id: String,
+        item_id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        pre_delay_ms: Option<u64>,
+        #[arg(long)]
+        post_delay_ms: Option<u64>,
+        #[arg(long, value_enum)]
+        on_failure: Option<CliFailurePolicy>,
+    },
+    TargetPath {
+        plan_id: String,
+        item_id: String,
+        value: String,
+    },
+    TargetProgram {
+        plan_id: String,
+        item_id: String,
+        value: String,
+        #[arg(long = "arg")]
+        args: Vec<String>,
+        #[arg(long)]
+        working_dir: Option<String>,
+    },
+    TargetUrl {
+        plan_id: String,
+        item_id: String,
+        value: String,
+    },
+    TargetCommand {
+        plan_id: String,
+        item_id: String,
+        value: String,
+        #[arg(long, value_enum, default_value = "power-shell")]
+        shell: CliShell,
+        #[arg(long)]
+        working_dir: Option<String>,
+    },
+    Move {
+        plan_id: String,
+        item_id: String,
+        #[arg(value_enum)]
+        direction: MoveDirection,
+    },
+    MoveToGroup {
+        plan_id: String,
+        item_id: String,
+        group_id: String,
+    },
+    MoveToRoot {
         plan_id: String,
         item_id: String,
     },
@@ -509,6 +574,17 @@ fn run_sequence_command(data_dir: &Path, command: SequenceCommand) -> Result<()>
             print_sequence(&plan);
             Ok(())
         }
+        SequenceCommand::Move {
+            plan_id,
+            node_id,
+            direction,
+        } => {
+            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
+            move_sequence_node(&mut plan, &node_id, direction)?;
+            save_changed_plan(data_dir, &file, &plan)?;
+            println!("moved node {node_id} {direction:?}");
+            Ok(())
+        }
     }
 }
 
@@ -667,6 +743,109 @@ fn run_item_command(data_dir: &Path, command: ItemCommand) -> Result<()> {
             println!("deleted item {item_id}");
             Ok(())
         }
+        ItemCommand::Edit {
+            plan_id,
+            item_id,
+            name,
+            description,
+            pre_delay_ms,
+            post_delay_ms,
+            on_failure,
+        } => {
+            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
+            let item = find_item_mut(&mut plan, &item_id)?;
+            if let Some(name) = name {
+                item.name = name;
+            }
+            if let Some(description) = description {
+                item.description = description;
+            }
+            if let Some(pre_delay_ms) = pre_delay_ms {
+                item.pre_delay_ms = pre_delay_ms;
+            }
+            if let Some(post_delay_ms) = post_delay_ms {
+                item.post_delay_ms = post_delay_ms;
+            }
+            if let Some(on_failure) = on_failure {
+                item.on_failure = on_failure.into();
+            }
+            save_changed_plan(data_dir, &file, &plan)?;
+            println!("edited item {item_id}");
+            Ok(())
+        }
+        ItemCommand::TargetPath {
+            plan_id,
+            item_id,
+            value,
+        } => set_item_target(data_dir, &plan_id, &item_id, LaunchTarget::Path { value }),
+        ItemCommand::TargetProgram {
+            plan_id,
+            item_id,
+            value,
+            args,
+            working_dir,
+        } => set_item_target(
+            data_dir,
+            &plan_id,
+            &item_id,
+            LaunchTarget::Program {
+                value,
+                args,
+                working_dir,
+            },
+        ),
+        ItemCommand::TargetUrl {
+            plan_id,
+            item_id,
+            value,
+        } => set_item_target(data_dir, &plan_id, &item_id, LaunchTarget::Url { value }),
+        ItemCommand::TargetCommand {
+            plan_id,
+            item_id,
+            value,
+            shell,
+            working_dir,
+        } => set_item_target(
+            data_dir,
+            &plan_id,
+            &item_id,
+            LaunchTarget::Command {
+                value,
+                shell: shell.into(),
+                working_dir,
+            },
+        ),
+        ItemCommand::Move {
+            plan_id,
+            item_id,
+            direction,
+        } => {
+            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
+            move_item(&mut plan, &item_id, direction)?;
+            save_changed_plan(data_dir, &file, &plan)?;
+            println!("moved item {item_id} {direction:?}");
+            Ok(())
+        }
+        ItemCommand::MoveToGroup {
+            plan_id,
+            item_id,
+            group_id,
+        } => {
+            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
+            let item = take_item(&mut plan, &item_id)?;
+            find_group_mut(&mut plan, &group_id)?.items.push(item);
+            save_changed_plan(data_dir, &file, &plan)?;
+            println!("moved item {item_id} to group {group_id}");
+            Ok(())
+        }
+        ItemCommand::MoveToRoot { plan_id, item_id } => {
+            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
+            let item = take_item(&mut plan, &item_id)?;
+            plan.sequence.push(SequenceNode::Item(item));
+            save_changed_plan(data_dir, &file, &plan)?;
+            println!("moved item {item_id} to root");
+            Ok(())
+        }
     }
 }
 
@@ -686,6 +865,19 @@ fn add_item(
     }
     save_changed_plan(data_dir, &file, &plan)?;
     println!("added item {item_id} to {plan_id}");
+    Ok(())
+}
+
+fn set_item_target(
+    data_dir: &Path,
+    plan_id: &str,
+    item_id: &str,
+    target: LaunchTarget,
+) -> Result<()> {
+    let (file, mut plan) = load_plan_by_id(data_dir, plan_id)?;
+    find_item_mut(&mut plan, item_id)?.target = target;
+    save_changed_plan(data_dir, &file, &plan)?;
+    println!("changed target for item {item_id}");
     Ok(())
 }
 
@@ -806,6 +998,63 @@ fn move_plan_entry(global: &mut GlobalConfig, id: &str, direction: MoveDirection
     Ok(())
 }
 
+fn move_sequence_node(plan: &mut Plan, node_id: &str, direction: MoveDirection) -> Result<()> {
+    let index = plan
+        .sequence
+        .iter()
+        .position(|node| node.id() == node_id)
+        .ok_or_else(|| validation_error(format!("top-level node not found: {node_id}")))?;
+    move_sequence_index(&mut plan.sequence, index, direction);
+    Ok(())
+}
+
+fn move_item(plan: &mut Plan, item_id: &str, direction: MoveDirection) -> Result<()> {
+    if let Some(index) = plan
+        .sequence
+        .iter()
+        .position(|node| matches!(node, SequenceNode::Item(item) if item.id == item_id))
+    {
+        move_sequence_index(&mut plan.sequence, index, direction);
+        return Ok(());
+    }
+
+    for node in &mut plan.sequence {
+        if let SequenceNode::Group(group) = node {
+            if let Some(index) = group.items.iter().position(|item| item.id == item_id) {
+                move_item_index(&mut group.items, index, direction);
+                return Ok(());
+            }
+        }
+    }
+
+    Err(validation_error(format!("item not found: {item_id}")))
+}
+
+fn move_sequence_index(nodes: &mut Vec<SequenceNode>, index: usize, direction: MoveDirection) {
+    let new_index = moved_index(index, nodes.len(), direction);
+    if index != new_index {
+        let node = nodes.remove(index);
+        nodes.insert(new_index, node);
+    }
+}
+
+fn move_item_index(items: &mut Vec<LaunchItem>, index: usize, direction: MoveDirection) {
+    let new_index = moved_index(index, items.len(), direction);
+    if index != new_index {
+        let item = items.remove(index);
+        items.insert(new_index, item);
+    }
+}
+
+fn moved_index(index: usize, len: usize, direction: MoveDirection) -> usize {
+    match direction {
+        MoveDirection::Top => 0,
+        MoveDirection::Up => index.saturating_sub(1),
+        MoveDirection::Down => (index + 1).min(len - 1),
+        MoveDirection::Bottom => len - 1,
+    }
+}
+
 fn find_plan<'a>(plans: &'a [Plan], plan_id: &str) -> Result<&'a Plan> {
     plans
         .iter()
@@ -857,6 +1106,22 @@ fn find_group_index(plan: &Plan, group_id: &str) -> Result<usize> {
         .ok_or_else(|| validation_error(format!("group not found: {group_id}")))
 }
 
+fn find_item_mut<'a>(plan: &'a mut Plan, item_id: &str) -> Result<&'a mut LaunchItem> {
+    for node in &mut plan.sequence {
+        match node {
+            SequenceNode::Item(item) if item.id == item_id => return Ok(item),
+            SequenceNode::Group(group) => {
+                if let Some(item) = group.items.iter_mut().find(|item| item.id == item_id) {
+                    return Ok(item);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Err(validation_error(format!("item not found: {item_id}")))
+}
+
 fn ensure_unique_id(plan: &Plan, id: &str) -> Result<()> {
     if plan.sequence.iter().any(|node| node.id() == id)
         || plan.sequence.iter().any(|node| match node {
@@ -884,6 +1149,29 @@ fn remove_item(plan: &mut Plan, item_id: &str) -> Result<()> {
             if let Some(index) = group.items.iter().position(|item| item.id == item_id) {
                 group.items.remove(index);
                 return Ok(());
+            }
+        }
+    }
+
+    Err(validation_error(format!("item not found: {item_id}")))
+}
+
+fn take_item(plan: &mut Plan, item_id: &str) -> Result<LaunchItem> {
+    if let Some(index) = plan
+        .sequence
+        .iter()
+        .position(|node| matches!(node, SequenceNode::Item(item) if item.id == item_id))
+    {
+        let SequenceNode::Item(item) = plan.sequence.remove(index) else {
+            unreachable!();
+        };
+        return Ok(item);
+    }
+
+    for node in &mut plan.sequence {
+        if let SequenceNode::Group(group) = node {
+            if let Some(index) = group.items.iter().position(|item| item.id == item_id) {
+                return Ok(group.items.remove(index));
             }
         }
     }
