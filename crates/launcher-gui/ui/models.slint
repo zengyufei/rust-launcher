@@ -1,0 +1,35 @@
+﻿export struct PlanRow {
+    id: string,
+    name: string,
+    meta: string,
+    selected: bool,
+    enabled: bool,
+}
+
+export struct SequenceRow {
+    id: string,
+    kind: string,
+    kind_label: string,
+    title: string,
+    description: string,
+    delay: string,
+    failure: string,
+    target: string,
+    child_primary_title: string,
+    child_primary_meta: string,
+    child_secondary_title: string,
+    child_secondary_meta: string,
+    child_more: string,
+    depth: int,
+    selected: bool,
+}
+
+export struct InspectorRow {
+    label: string,
+    value: string,
+}
+
+export struct LogRow {
+    level: string,
+    message: string,
+}

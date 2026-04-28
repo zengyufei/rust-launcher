@@ -1,0 +1,132 @@
+﻿export component Panel inherits Rectangle {
+    background: #ffffff;
+    border-color: #dde4ee;
+    border-width: 1px;
+    border-radius: 8px;
+}
+
+export component SelectableText inherits TextInput {
+    in property <brush> text-color: #334155;
+    in property <length> text-size: 12px;
+    in property <int> text-weight: 400;
+    read-only: true;
+    single-line: true;
+    font-family: "Microsoft YaHei UI";
+    color: root.text-color;
+    font-size: root.text-size;
+    font-weight: root.text-weight;
+    selection-background-color: #bfdbfe;
+    selection-foreground-color: #0f172a;
+}
+
+export component SectionTitle inherits SelectableText {
+    height: 24px;
+    text-size: 18px;
+    text-weight: 700;
+    text-color: #182033;
+}
+
+export component LabelText inherits SelectableText {
+    height: 16px;
+    text-size: 12px;
+    text-color: #60708a;
+}
+
+export component PrimaryMiniButton inherits Rectangle {
+    in property <string> text;
+    in property <image> icon: @image-url("icons/plus-white.svg");
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 104px;
+    height: 34px;
+    background: !root.enabled ? #cbd5e1 : (button-touch.pressed ? #1557b8 : (button-touch.has-hover ? #2f7df1 : #1f6feb));
+    border-radius: 6px;
+
+    Image {
+        x: 12px;
+        y: 9px;
+        width: 14px;
+        height: 14px;
+        source: root.icon;
+    }
+
+    Text {
+        x: 30px;
+        width: parent.width - 34px;
+        text: root.text;
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    button-touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component PlanMenuRow inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> danger;
+    in property <bool> emphasized;
+    callback clicked();
+
+    height: root.emphasized ? 34px : 32px;
+    background: root.danger ? (menu-touch.pressed ? #ffe4e6 : (menu-touch.has-hover ? #fff1f2 : #fff7f8)) : (menu-touch.pressed ? #e2e8f0 : (menu-touch.has-hover ? #f8fafc : (root.emphasized ? #f8fafc : #ffffff)));
+    border-radius: 6px;
+
+    Image {
+        x: 10px;
+        y: (parent.height - 14px) / 2;
+        width: 14px;
+        height: 14px;
+        source: root.icon;
+    }
+
+    Text {
+        x: 32px;
+        width: parent.width - 42px;
+        text: root.text;
+        color: root.danger ? #be123c : (root.emphasized ? #0f172a : #334155);
+        font-size: 13px;
+        font-weight: root.emphasized ? 600 : 400;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    menu-touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component DialogButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> danger;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    width: root.primary ? 104px : 86px;
+    height: 34px;
+    background: !root.enabled ? #cbd5e1 : (root.danger ? (button-touch.pressed ? #be123c : (button-touch.has-hover ? #f43f5e : #e11d48)) : (root.primary ? (button-touch.pressed ? #1557b8 : (button-touch.has-hover ? #2f7df1 : #1f6feb)) : (button-touch.pressed ? #e2e8f0 : (button-touch.has-hover ? #f8fafc : #ffffff))));
+    border-color: root.primary || root.danger ? #00000000 : #cbd5e1;
+    border-width: root.primary || root.danger ? 0px : 1px;
+    border-radius: 6px;
+
+    Text {
+        text: root.text;
+        color: root.primary || root.danger ? #ffffff : #334155;
+        font-size: 13px;
+        font-weight: root.primary || root.danger ? 700 : 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    button-touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}

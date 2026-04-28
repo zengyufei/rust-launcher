@@ -25,6 +25,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 struct GuiState {
     workspace: Option<Workspace>,
     selected_plan_id: Option<String>,
+    search_query: String,
     selected_node_ids: Vec<String>,
     logs: Vec<LogRow>,
     running: bool,
@@ -57,6 +58,7 @@ fn main() -> Result<()> {
     let state = Arc::new(Mutex::new(GuiState {
         workspace: None,
         selected_plan_id: None,
+        search_query: String::new(),
         selected_node_ids: Vec::new(),
         logs: Vec::new(),
         running: false,
@@ -109,6 +111,18 @@ fn main() -> Result<()> {
     app.on_run_selected(move || {
         if let Some(app) = weak.upgrade() {
             start_run(&app, &state_for_run);
+        }
+    });
+
+    let weak = app.as_weak();
+    let state_for_search = Arc::clone(&state);
+    app.on_search_changed(move |query| {
+        if let Some(app) = weak.upgrade() {
+            let mut state = state_for_search.lock().expect("GUI state lock poisoned");
+            state.search_query = query.to_string();
+            state.context_plan_id = None;
+            drop(state);
+            render(&app, &state_for_search);
         }
     });
 
@@ -1981,6 +1995,7 @@ fn render(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
     let Some(workspace) = &state.workspace else {
         app.set_selected_plan_title("未加载方案".into());
         app.set_selected_plan_file("请检查 data/global.json 与 plans/*.json".into());
+        app.set_selected_plan_enabled(false);
         app.set_plan_rows(model_from(Vec::new()));
         app.set_sequence_rows(model_from(Vec::new()));
         app.set_has_selection(false);
@@ -1997,7 +2012,12 @@ fn render(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
     let selected_entry =
         selected_plan_id.and_then(|id| workspace.global.plans.iter().find(|p| p.id == id));
 
-    app.set_plan_rows(model_from(plan_rows(workspace, selected_plan_id)));
+    app.set_selected_plan_enabled(selected_entry.is_some_and(|entry| entry.enabled));
+    app.set_plan_rows(model_from(plan_rows(
+        workspace,
+        selected_plan_id,
+        &state.search_query,
+    )));
     app.set_sequence_rows(model_from(sequence_rows(
         selected_plan,
         &state.selected_node_ids,
@@ -2026,19 +2046,30 @@ fn render(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
 }
 
 fn start_run(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
-    let plan_id = {
+    let plan_to_run = {
         let state = state.lock().expect("GUI state lock poisoned");
-        state
-            .workspace
-            .as_ref()
-            .and_then(|workspace| selected_plan_id(&state, workspace))
-            .map(str::to_string)
+        state.workspace.as_ref().and_then(|workspace| {
+            let plan_id = selected_plan_id(&state, workspace)?;
+            let enabled = workspace
+                .global
+                .plans
+                .iter()
+                .find(|entry| entry.id == plan_id)
+                .is_some_and(|entry| entry.enabled);
+            Some((plan_id.to_string(), enabled))
+        })
     };
-    let Some(plan_id) = plan_id else {
+    let Some((plan_id, enabled)) = plan_to_run else {
         append_log(state, "error", "没有可运行的方案");
         render(app, state);
         return;
     };
+
+    if !enabled {
+        append_log(state, "error", format!("方案已禁用，不能运行: {plan_id}"));
+        render(app, state);
+        return;
+    }
 
     if state.lock().expect("GUI state lock poisoned").running {
         return;
@@ -2250,27 +2281,79 @@ fn selected_plan_id<'a>(state: &'a GuiState, workspace: &'a Workspace) -> Option
         .or_else(|| workspace.plans.first().map(|plan| plan.id.as_str()))
 }
 
-fn plan_rows(workspace: &Workspace, selected_plan_id: Option<&str>) -> Vec<PlanRow> {
+fn plan_rows(
+    workspace: &Workspace,
+    selected_plan_id: Option<&str>,
+    search_query: &str,
+) -> Vec<PlanRow> {
+    let search_query = search_query.trim().to_lowercase();
     workspace
         .global
         .plans
         .iter()
-        .map(|entry| {
-            let name = workspace
-                .plans
-                .iter()
-                .find(|plan| plan.id == entry.id)
+        .filter_map(|entry| {
+            let plan = workspace.plans.iter().find(|plan| plan.id == entry.id);
+            let name = plan
                 .map(|plan| plan.name.clone())
                 .unwrap_or_else(|| "<缺失>".to_string());
-            PlanRow {
+
+            if !search_query.is_empty() && !plan_matches_search(entry, plan, &name, &search_query) {
+                return None;
+            }
+
+            Some(PlanRow {
                 id: entry.id.clone().into(),
                 name: name.into(),
                 meta: plan_meta(entry).into(),
                 selected: selected_plan_id == Some(entry.id.as_str()),
                 enabled: entry.enabled,
-            }
+            })
         })
         .collect()
+}
+
+fn plan_matches_search(
+    entry: &PlanCatalogEntry,
+    plan: Option<&Plan>,
+    name: &str,
+    search_query: &str,
+) -> bool {
+    text_matches(&entry.id, search_query)
+        || text_matches(name, search_query)
+        || text_matches(&entry.file, search_query)
+        || text_matches(&plan_meta(entry), search_query)
+        || plan.is_some_and(|plan| {
+            plan.sequence
+                .iter()
+                .any(|node| sequence_node_matches_search(node, search_query))
+        })
+}
+
+fn sequence_node_matches_search(node: &SequenceNode, search_query: &str) -> bool {
+    match node {
+        SequenceNode::Group(group) => {
+            text_matches(&group.id, search_query)
+                || text_matches(&group.name, search_query)
+                || text_matches(&group.description, search_query)
+                || group
+                    .items
+                    .iter()
+                    .any(|item| launch_item_matches_search(item, search_query))
+        }
+        SequenceNode::Item(item) => launch_item_matches_search(item, search_query),
+    }
+}
+
+fn launch_item_matches_search(item: &LaunchItem, search_query: &str) -> bool {
+    text_matches(&item.id, search_query)
+        || text_matches(&item.name, search_query)
+        || text_matches(&item.description, search_query)
+        || text_matches(target_kind(&item.target), search_query)
+        || text_matches(&target_summary(&item.target), search_query)
+}
+
+fn text_matches(text: &str, search_query: &str) -> bool {
+    text.to_lowercase().contains(search_query)
 }
 
 fn sequence_rows(plan: Option<&Plan>, selected_node_ids: &[String]) -> Vec<SequenceRow> {

@@ -26,29 +26,39 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
+      - name: Restore Cargo dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deps-
+
       - name: Test
         run: cargo test --workspace --locked
 
       - name: Build
         run: cargo build --workspace --release --locked
 
-      - name: Package
-        id: package
+      - name: Prepare release binaries
+        id: binaries
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
           $safeTag = $tag -replace '[^A-Za-z0-9._-]', '-'
           $repo = "${{ github.event.repository.name }}"
           $dist = "dist"
-          $archive = "$repo-$safeTag-windows-x64.zip"
+          $cli = "$repo-cli-$safeTag-windows-x64.exe"
+          $gui = "$repo-gui-$safeTag-windows-x64.exe"
 
           New-Item -ItemType Directory -Force $dist | Out-Null
-          Copy-Item "target/release/launcher.exe" "$dist/launcher.exe"
-          Copy-Item "target/release/launcher-gui.exe" "$dist/launcher-gui.exe"
-          Copy-Item "README.md" "$dist/README.md"
-          Compress-Archive -Path "$dist/*" -DestinationPath $archive -Force
+          Copy-Item "target/release/launcher.exe" "$dist/$cli"
+          Copy-Item "target/release/launcher-gui.exe" "$dist/$gui"
 
-          "archive=$archive" >> $env:GITHUB_OUTPUT
+          "cli=$dist/$cli" >> $env:GITHUB_OUTPUT
+          "gui=$dist/$gui" >> $env:GITHUB_OUTPUT
 
       - name: Publish GitHub release
         shell: pwsh
@@ -56,11 +66,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ github.ref_name }}"
-          $archive = "${{ steps.package.outputs.archive }}"
+          $cli = "${{ steps.binaries.outputs.cli }}"
+          $gui = "${{ steps.binaries.outputs.gui }}"
 
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $archive --clobber
+            gh release view $tag --json assets --jq '.assets[].name' |
+              Where-Object { $_ -like "*.zip" } |
+              ForEach-Object { gh release delete-asset $tag $_ --yes }
+            gh release upload $tag $cli $gui --clobber
           } else {
-            gh release create $tag $archive --title $tag --notes "Automated release for $tag."
+            gh release create $tag $cli $gui --title $tag --notes "Automated release for $tag."
           }
