@@ -75,16 +75,21 @@ fn is_due(schedule: &ScheduleRule, now: NaiveDateTime) -> bool {
             }
             Err(_) => false,
         },
-        ScheduleRule::Once { at } => parse_once_datetime(at).map(|at| now >= at).unwrap_or(false),
+        ScheduleRule::Once { at } => parse_once_datetime(at)
+            .map(|at| {
+                let age = now.signed_duration_since(at).num_seconds();
+                (0..60).contains(&age)
+            })
+            .unwrap_or(false),
     }
 }
 
 fn fired_key(plan_id: &str, index: usize, schedule: &ScheduleRule, now: NaiveDateTime) -> String {
     match schedule {
-        ScheduleRule::Daily { .. } => format!("{plan_id}:{index}:{}", now.date()),
-        ScheduleRule::Weekly { .. } => {
+        ScheduleRule::Daily { time } => format!("{plan_id}:{index}:daily:{time}:{}", now.date()),
+        ScheduleRule::Weekly { weekday, time } => {
             format!(
-                "{plan_id}:{index}:{}-week-{}",
+                "{plan_id}:{index}:weekly:{weekday:?}:{time}:{}-week-{}",
                 now.year(),
                 now.iso_week().week()
             )
@@ -110,5 +115,69 @@ fn rust_weekday(weekday: chrono::Weekday) -> Weekday {
         chrono::Weekday::Fri => Weekday::Friday,
         chrono::Weekday::Sat => Weekday::Saturday,
         chrono::Weekday::Sun => Weekday::Sunday,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fired_keys_include_repeating_schedule_identity() {
+        let now = chrono::NaiveDate::from_ymd_opt(2026, 5, 1)
+            .unwrap()
+            .and_hms_opt(9, 0, 0)
+            .unwrap();
+
+        let daily_nine = ScheduleRule::Daily {
+            time: "09:00".to_string(),
+        };
+        let daily_later = ScheduleRule::Daily {
+            time: "09:30".to_string(),
+        };
+        assert_ne!(
+            fired_key("work", 0, &daily_nine, now),
+            fired_key("work", 0, &daily_later, now)
+        );
+
+        let weekly_nine = ScheduleRule::Weekly {
+            weekday: Weekday::Friday,
+            time: "09:00".to_string(),
+        };
+        let weekly_later = ScheduleRule::Weekly {
+            weekday: Weekday::Friday,
+            time: "09:30".to_string(),
+        };
+        assert_ne!(
+            fired_key("work", 0, &weekly_nine, now),
+            fired_key("work", 0, &weekly_later, now)
+        );
+    }
+
+    #[test]
+    fn once_schedule_does_not_run_when_overdue() {
+        let now = chrono::NaiveDate::from_ymd_opt(2026, 5, 1)
+            .unwrap()
+            .and_hms_opt(18, 0, 0)
+            .unwrap();
+
+        assert!(!is_due(
+            &ScheduleRule::Once {
+                at: "2026-05-01T17:59:00".to_string()
+            },
+            now
+        ));
+        assert!(is_due(
+            &ScheduleRule::Once {
+                at: "2026-05-01T17:59:30".to_string()
+            },
+            now
+        ));
+        assert!(!is_due(
+            &ScheduleRule::Once {
+                at: "2026-05-01T18:00:30".to_string()
+            },
+            now
+        ));
     }
 }

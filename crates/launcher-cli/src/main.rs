@@ -1,5 +1,4 @@
 use std::{
-    fs,
     path::{Path, PathBuf},
     thread,
     time::Duration,
@@ -7,11 +6,14 @@ use std::{
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use launcher_core::{
-    create_plan, create_plan_with_file, default_data_dir, execute_plan, execute_single_item,
-    load_global, load_plan, load_workspace, save_global, save_plan, validate_workspace,
-    CommandShell, ExecuteOptions, ExecutionReport, FailurePolicy, GlobalConfig, Group, LaunchItem,
-    LaunchTarget, LaunchTrigger, LauncherError, Plan, PlanCatalogEntry, ScheduleRule, Scheduler,
-    SequenceNode, Weekday, Workspace,
+    add_group, add_item as store_add_item, add_plan_schedule, create_plan, create_plan_with_file,
+    default_data_dir, delete_group, delete_item, delete_plan, delete_plan_schedule, execute_plan,
+    execute_single_item, load_global, load_plan, load_workspace, move_item, move_item_to_group,
+    move_item_to_root, move_plan, move_sequence_node, rename_plan, set_plan_enabled,
+    set_plan_launch_trigger, update_group, update_item, validate_workspace, CommandShell,
+    ExecuteOptions, ExecutionReport, FailurePolicy, GlobalConfig, Group, GroupUpdate, ItemUpdate,
+    LaunchItem, LaunchTarget, LaunchTrigger, LauncherError, NodeMoveDirection, Plan,
+    PlanCatalogEntry, PlanMoveDirection, ScheduleRule, Scheduler, SequenceNode, Weekday,
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -390,6 +392,28 @@ impl From<CliShell> for CommandShell {
     }
 }
 
+impl From<MoveDirection> for PlanMoveDirection {
+    fn from(value: MoveDirection) -> Self {
+        match value {
+            MoveDirection::Top => Self::Top,
+            MoveDirection::Up => Self::Up,
+            MoveDirection::Down => Self::Down,
+            MoveDirection::Bottom => Self::Bottom,
+        }
+    }
+}
+
+impl From<MoveDirection> for NodeMoveDirection {
+    fn from(value: MoveDirection) -> Self {
+        match value {
+            MoveDirection::Top => Self::Top,
+            MoveDirection::Up => Self::Up,
+            MoveDirection::Down => Self::Down,
+            MoveDirection::Bottom => Self::Bottom,
+        }
+    }
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -454,44 +478,27 @@ fn run_plan_command(data_dir: &Path, command: PlanCommand) -> Result<()> {
             Ok(())
         }
         PlanCommand::Rename { id, name } => {
-            let (file, mut plan) = load_plan_by_id(data_dir, &id)?;
-            plan.name = name;
-            save_changed_plan(data_dir, &file, &plan)?;
+            let plan = rename_plan(data_dir, &id, &name)?;
             println!("renamed plan {}", plan.id);
             Ok(())
         }
         PlanCommand::Delete { id, delete_file } => {
-            let mut global = load_global(data_dir)?;
-            let index = find_plan_entry_index(&global, &id)?;
-            let entry = global.plans.remove(index);
-            save_changed_global(data_dir, &global, None)?;
-            if delete_file {
-                let path = data_dir.join(&entry.file);
-                if path.exists() {
-                    fs::remove_file(&path).map_err(|source| LauncherError::Io { path, source })?;
-                }
-            }
+            delete_plan(data_dir, &id, delete_file)?;
             println!("deleted plan catalog entry {id}");
             Ok(())
         }
         PlanCommand::Enable { id } => {
-            let mut global = load_global(data_dir)?;
-            find_plan_entry_mut(&mut global, &id)?.enabled = true;
-            save_changed_global(data_dir, &global, None)?;
+            set_plan_enabled(data_dir, &id, true)?;
             println!("enabled plan {id}");
             Ok(())
         }
         PlanCommand::Disable { id } => {
-            let mut global = load_global(data_dir)?;
-            find_plan_entry_mut(&mut global, &id)?.enabled = false;
-            save_changed_global(data_dir, &global, None)?;
+            set_plan_enabled(data_dir, &id, false)?;
             println!("disabled plan {id}");
             Ok(())
         }
         PlanCommand::Move { id, direction } => {
-            let mut global = load_global(data_dir)?;
-            move_plan_entry(&mut global, &id, direction)?;
-            save_changed_global(data_dir, &global, None)?;
+            move_plan(data_dir, &id, direction.into())?;
             println!("moved plan {id} {direction:?}");
             Ok(())
         }
@@ -513,9 +520,7 @@ fn run_launch_command(data_dir: &Path, command: LaunchCommand) -> Result<()> {
             Ok(())
         }
         LaunchCommand::Set { plan_id, trigger } => {
-            let mut global = load_global(data_dir)?;
-            find_plan_entry_mut(&mut global, &plan_id)?.launch.trigger = trigger.into();
-            save_changed_global(data_dir, &global, None)?;
+            set_plan_launch_trigger(data_dir, &plan_id, trigger.into())?;
             println!("set launch trigger for {plan_id}");
             Ok(())
         }
@@ -531,13 +536,13 @@ fn run_schedule_command(data_dir: &Path, command: ScheduleCommand) -> Result<()>
             Ok(())
         }
         ScheduleCommand::AddDaily { plan_id, time } => {
-            push_schedule(data_dir, &plan_id, ScheduleRule::Daily { time })
+            add_schedule(data_dir, &plan_id, ScheduleRule::Daily { time })
         }
         ScheduleCommand::AddWeekly {
             plan_id,
             weekday,
             time,
-        } => push_schedule(
+        } => add_schedule(
             data_dir,
             &plan_id,
             ScheduleRule::Weekly {
@@ -546,21 +551,13 @@ fn run_schedule_command(data_dir: &Path, command: ScheduleCommand) -> Result<()>
             },
         ),
         ScheduleCommand::AddOnce { plan_id, at } => {
-            push_schedule(data_dir, &plan_id, ScheduleRule::Once { at })
+            add_schedule(data_dir, &plan_id, ScheduleRule::Once { at })
         }
         ScheduleCommand::Remove { plan_id, index } => {
             if index == 0 {
                 return Err(validation_error("schedule index starts at 1"));
             }
-            let mut global = load_global(data_dir)?;
-            let entry = find_plan_entry_mut(&mut global, &plan_id)?;
-            if index > entry.launch.schedules.len() {
-                return Err(validation_error(format!(
-                    "schedule index {index} is out of range"
-                )));
-            }
-            entry.launch.schedules.remove(index - 1);
-            save_changed_global(data_dir, &global, None)?;
+            delete_plan_schedule(data_dir, &plan_id, index - 1)?;
             println!("removed schedule {index} from {plan_id}");
             Ok(())
         }
@@ -579,9 +576,7 @@ fn run_sequence_command(data_dir: &Path, command: SequenceCommand) -> Result<()>
             node_id,
             direction,
         } => {
-            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
-            move_sequence_node(&mut plan, &node_id, direction)?;
-            save_changed_plan(data_dir, &file, &plan)?;
+            move_sequence_node(data_dir, &plan_id, &node_id, direction.into())?;
             println!("moved node {node_id} {direction:?}");
             Ok(())
         }
@@ -596,18 +591,19 @@ fn run_group_command(data_dir: &Path, command: GroupCommand) -> Result<()> {
             name,
             options,
         } => {
-            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
-            ensure_unique_id(&plan, &id)?;
-            plan.sequence.push(SequenceNode::Group(Group {
-                id: id.clone(),
-                name,
-                description: options.description,
-                pre_delay_ms: options.pre_delay_ms,
-                post_delay_ms: options.post_delay_ms,
-                on_failure: options.on_failure.into(),
-                items: Vec::new(),
-            }));
-            save_changed_plan(data_dir, &file, &plan)?;
+            add_group(
+                data_dir,
+                &plan_id,
+                Group {
+                    id: id.clone(),
+                    name,
+                    description: options.description,
+                    pre_delay_ms: options.pre_delay_ms,
+                    post_delay_ms: options.post_delay_ms,
+                    on_failure: options.on_failure.into(),
+                    items: Vec::new(),
+                },
+            )?;
             println!("added group {id} to {plan_id}");
             Ok(())
         }
@@ -620,24 +616,18 @@ fn run_group_command(data_dir: &Path, command: GroupCommand) -> Result<()> {
             post_delay_ms,
             on_failure,
         } => {
-            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
-            let group = find_group_mut(&mut plan, &group_id)?;
-            if let Some(name) = name {
-                group.name = name;
-            }
-            if let Some(description) = description {
-                group.description = description;
-            }
-            if let Some(pre_delay_ms) = pre_delay_ms {
-                group.pre_delay_ms = pre_delay_ms;
-            }
-            if let Some(post_delay_ms) = post_delay_ms {
-                group.post_delay_ms = post_delay_ms;
-            }
-            if let Some(on_failure) = on_failure {
-                group.on_failure = on_failure.into();
-            }
-            save_changed_plan(data_dir, &file, &plan)?;
+            update_group(
+                data_dir,
+                &plan_id,
+                &group_id,
+                GroupUpdate {
+                    name,
+                    description,
+                    pre_delay_ms,
+                    post_delay_ms,
+                    on_failure: on_failure.map(Into::into),
+                },
+            )?;
             println!("edited group {group_id}");
             Ok(())
         }
@@ -646,18 +636,7 @@ fn run_group_command(data_dir: &Path, command: GroupCommand) -> Result<()> {
             group_id,
             keep_items,
         } => {
-            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
-            let index = find_group_index(&plan, &group_id)?;
-            let SequenceNode::Group(group) = plan.sequence.remove(index) else {
-                unreachable!();
-            };
-            if keep_items {
-                for (offset, item) in group.items.into_iter().enumerate() {
-                    plan.sequence
-                        .insert(index + offset, SequenceNode::Item(item));
-                }
-            }
-            save_changed_plan(data_dir, &file, &plan)?;
+            delete_group(data_dir, &plan_id, &group_id, keep_items)?;
             println!("deleted group {group_id}");
             Ok(())
         }
@@ -737,9 +716,7 @@ fn run_item_command(data_dir: &Path, command: ItemCommand) -> Result<()> {
             ),
         ),
         ItemCommand::Delete { plan_id, item_id } => {
-            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
-            remove_item(&mut plan, &item_id)?;
-            save_changed_plan(data_dir, &file, &plan)?;
+            delete_item(data_dir, &plan_id, &item_id)?;
             println!("deleted item {item_id}");
             Ok(())
         }
@@ -752,24 +729,19 @@ fn run_item_command(data_dir: &Path, command: ItemCommand) -> Result<()> {
             post_delay_ms,
             on_failure,
         } => {
-            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
-            let item = find_item_mut(&mut plan, &item_id)?;
-            if let Some(name) = name {
-                item.name = name;
-            }
-            if let Some(description) = description {
-                item.description = description;
-            }
-            if let Some(pre_delay_ms) = pre_delay_ms {
-                item.pre_delay_ms = pre_delay_ms;
-            }
-            if let Some(post_delay_ms) = post_delay_ms {
-                item.post_delay_ms = post_delay_ms;
-            }
-            if let Some(on_failure) = on_failure {
-                item.on_failure = on_failure.into();
-            }
-            save_changed_plan(data_dir, &file, &plan)?;
+            update_item(
+                data_dir,
+                &plan_id,
+                &item_id,
+                ItemUpdate {
+                    name,
+                    description,
+                    pre_delay_ms,
+                    post_delay_ms,
+                    on_failure: on_failure.map(Into::into),
+                    target: None,
+                },
+            )?;
             println!("edited item {item_id}");
             Ok(())
         }
@@ -820,9 +792,7 @@ fn run_item_command(data_dir: &Path, command: ItemCommand) -> Result<()> {
             item_id,
             direction,
         } => {
-            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
-            move_item(&mut plan, &item_id, direction)?;
-            save_changed_plan(data_dir, &file, &plan)?;
+            move_item(data_dir, &plan_id, &item_id, direction.into())?;
             println!("moved item {item_id} {direction:?}");
             Ok(())
         }
@@ -831,18 +801,12 @@ fn run_item_command(data_dir: &Path, command: ItemCommand) -> Result<()> {
             item_id,
             group_id,
         } => {
-            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
-            let item = take_item(&mut plan, &item_id)?;
-            find_group_mut(&mut plan, &group_id)?.items.push(item);
-            save_changed_plan(data_dir, &file, &plan)?;
+            move_item_to_group(data_dir, &plan_id, &item_id, &group_id)?;
             println!("moved item {item_id} to group {group_id}");
             Ok(())
         }
         ItemCommand::MoveToRoot { plan_id, item_id } => {
-            let (file, mut plan) = load_plan_by_id(data_dir, &plan_id)?;
-            let item = take_item(&mut plan, &item_id)?;
-            plan.sequence.push(SequenceNode::Item(item));
-            save_changed_plan(data_dir, &file, &plan)?;
+            move_item_to_root(data_dir, &plan_id, &item_id)?;
             println!("moved item {item_id} to root");
             Ok(())
         }
@@ -855,15 +819,8 @@ fn add_item(
     group_id: Option<&str>,
     item: LaunchItem,
 ) -> Result<()> {
-    let (file, mut plan) = load_plan_by_id(data_dir, plan_id)?;
-    ensure_unique_id(&plan, &item.id)?;
     let item_id = item.id.clone();
-    if let Some(group_id) = group_id {
-        find_group_mut(&mut plan, group_id)?.items.push(item);
-    } else {
-        plan.sequence.push(SequenceNode::Item(item));
-    }
-    save_changed_plan(data_dir, &file, &plan)?;
+    store_add_item(data_dir, plan_id, group_id, item)?;
     println!("added item {item_id} to {plan_id}");
     Ok(())
 }
@@ -874,9 +831,15 @@ fn set_item_target(
     item_id: &str,
     target: LaunchTarget,
 ) -> Result<()> {
-    let (file, mut plan) = load_plan_by_id(data_dir, plan_id)?;
-    find_item_mut(&mut plan, item_id)?.target = target;
-    save_changed_plan(data_dir, &file, &plan)?;
+    update_item(
+        data_dir,
+        plan_id,
+        item_id,
+        ItemUpdate {
+            target: Some(target),
+            ..Default::default()
+        },
+    )?;
     println!("changed target for item {item_id}");
     Ok(())
 }
@@ -893,13 +856,8 @@ fn build_item(id: String, name: String, target: LaunchTarget, options: NodeOptio
     }
 }
 
-fn push_schedule(data_dir: &Path, plan_id: &str, schedule: ScheduleRule) -> Result<()> {
-    let mut global = load_global(data_dir)?;
-    find_plan_entry_mut(&mut global, plan_id)?
-        .launch
-        .schedules
-        .push(schedule);
-    save_changed_global(data_dir, &global, None)?;
+fn add_schedule(data_dir: &Path, plan_id: &str, schedule: ScheduleRule) -> Result<()> {
+    add_plan_schedule(data_dir, plan_id, schedule)?;
     println!("added schedule to {plan_id}");
     Ok(())
 }
@@ -945,116 +903,6 @@ fn load_plan_by_id(data_dir: &Path, plan_id: &str) -> Result<(String, Plan)> {
     Ok((entry.file.clone(), load_plan(data_dir, &entry.file)?))
 }
 
-fn save_changed_plan(data_dir: &Path, file: &str, plan: &Plan) -> Result<()> {
-    let global = load_global(data_dir)?;
-    validate_pending_workspace(data_dir, &global, Some(plan))?;
-    save_plan(data_dir, file, plan)?;
-    Ok(())
-}
-
-fn save_changed_global(
-    data_dir: &Path,
-    global: &GlobalConfig,
-    changed_plan: Option<&Plan>,
-) -> Result<()> {
-    validate_pending_workspace(data_dir, global, changed_plan)?;
-    save_global(data_dir, global)?;
-    Ok(())
-}
-
-fn validate_pending_workspace(
-    data_dir: &Path,
-    global: &GlobalConfig,
-    changed_plan: Option<&Plan>,
-) -> Result<()> {
-    let mut plans = Vec::new();
-    for entry in &global.plans {
-        if let Some(plan) = changed_plan.filter(|plan| plan.id == entry.id) {
-            plans.push(plan.clone());
-        } else {
-            plans.push(load_plan(data_dir, &entry.file)?);
-        }
-    }
-    validate_workspace(&Workspace {
-        data_dir: data_dir.to_path_buf(),
-        global: global.clone(),
-        plans,
-    })?;
-    Ok(())
-}
-
-fn move_plan_entry(global: &mut GlobalConfig, id: &str, direction: MoveDirection) -> Result<()> {
-    let index = find_plan_entry_index(global, id)?;
-    let new_index = match direction {
-        MoveDirection::Top => 0,
-        MoveDirection::Up => index.saturating_sub(1),
-        MoveDirection::Down => (index + 1).min(global.plans.len() - 1),
-        MoveDirection::Bottom => global.plans.len() - 1,
-    };
-    if index != new_index {
-        let entry = global.plans.remove(index);
-        global.plans.insert(new_index, entry);
-    }
-    Ok(())
-}
-
-fn move_sequence_node(plan: &mut Plan, node_id: &str, direction: MoveDirection) -> Result<()> {
-    let index = plan
-        .sequence
-        .iter()
-        .position(|node| node.id() == node_id)
-        .ok_or_else(|| validation_error(format!("top-level node not found: {node_id}")))?;
-    move_sequence_index(&mut plan.sequence, index, direction);
-    Ok(())
-}
-
-fn move_item(plan: &mut Plan, item_id: &str, direction: MoveDirection) -> Result<()> {
-    if let Some(index) = plan
-        .sequence
-        .iter()
-        .position(|node| matches!(node, SequenceNode::Item(item) if item.id == item_id))
-    {
-        move_sequence_index(&mut plan.sequence, index, direction);
-        return Ok(());
-    }
-
-    for node in &mut plan.sequence {
-        if let SequenceNode::Group(group) = node {
-            if let Some(index) = group.items.iter().position(|item| item.id == item_id) {
-                move_item_index(&mut group.items, index, direction);
-                return Ok(());
-            }
-        }
-    }
-
-    Err(validation_error(format!("item not found: {item_id}")))
-}
-
-fn move_sequence_index(nodes: &mut Vec<SequenceNode>, index: usize, direction: MoveDirection) {
-    let new_index = moved_index(index, nodes.len(), direction);
-    if index != new_index {
-        let node = nodes.remove(index);
-        nodes.insert(new_index, node);
-    }
-}
-
-fn move_item_index(items: &mut Vec<LaunchItem>, index: usize, direction: MoveDirection) {
-    let new_index = moved_index(index, items.len(), direction);
-    if index != new_index {
-        let item = items.remove(index);
-        items.insert(new_index, item);
-    }
-}
-
-fn moved_index(index: usize, len: usize, direction: MoveDirection) -> usize {
-    match direction {
-        MoveDirection::Top => 0,
-        MoveDirection::Up => index.saturating_sub(1),
-        MoveDirection::Down => (index + 1).min(len - 1),
-        MoveDirection::Bottom => len - 1,
-    }
-}
-
 fn find_plan<'a>(plans: &'a [Plan], plan_id: &str) -> Result<&'a Plan> {
     plans
         .iter()
@@ -1068,115 +916,6 @@ fn find_plan_entry<'a>(global: &'a GlobalConfig, plan_id: &str) -> Result<&'a Pl
         .iter()
         .find(|entry| entry.id == plan_id)
         .ok_or_else(|| LauncherError::PlanNotFound(plan_id.to_string()).into())
-}
-
-fn find_plan_entry_mut<'a>(
-    global: &'a mut GlobalConfig,
-    plan_id: &str,
-) -> Result<&'a mut PlanCatalogEntry> {
-    global
-        .plans
-        .iter_mut()
-        .find(|entry| entry.id == plan_id)
-        .ok_or_else(|| LauncherError::PlanNotFound(plan_id.to_string()).into())
-}
-
-fn find_plan_entry_index(global: &GlobalConfig, plan_id: &str) -> Result<usize> {
-    global
-        .plans
-        .iter()
-        .position(|entry| entry.id == plan_id)
-        .ok_or_else(|| LauncherError::PlanNotFound(plan_id.to_string()).into())
-}
-
-fn find_group_mut<'a>(plan: &'a mut Plan, group_id: &str) -> Result<&'a mut Group> {
-    plan.sequence
-        .iter_mut()
-        .find_map(|node| match node {
-            SequenceNode::Group(group) if group.id == group_id => Some(group),
-            _ => None,
-        })
-        .ok_or_else(|| validation_error(format!("group not found: {group_id}")))
-}
-
-fn find_group_index(plan: &Plan, group_id: &str) -> Result<usize> {
-    plan.sequence
-        .iter()
-        .position(|node| matches!(node, SequenceNode::Group(group) if group.id == group_id))
-        .ok_or_else(|| validation_error(format!("group not found: {group_id}")))
-}
-
-fn find_item_mut<'a>(plan: &'a mut Plan, item_id: &str) -> Result<&'a mut LaunchItem> {
-    for node in &mut plan.sequence {
-        match node {
-            SequenceNode::Item(item) if item.id == item_id => return Ok(item),
-            SequenceNode::Group(group) => {
-                if let Some(item) = group.items.iter_mut().find(|item| item.id == item_id) {
-                    return Ok(item);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    Err(validation_error(format!("item not found: {item_id}")))
-}
-
-fn ensure_unique_id(plan: &Plan, id: &str) -> Result<()> {
-    if plan.sequence.iter().any(|node| node.id() == id)
-        || plan.sequence.iter().any(|node| match node {
-            SequenceNode::Group(group) => group.items.iter().any(|item| item.id == id),
-            SequenceNode::Item(_) => false,
-        })
-    {
-        return Err(validation_error(format!("duplicate id in plan: {id}")));
-    }
-    Ok(())
-}
-
-fn remove_item(plan: &mut Plan, item_id: &str) -> Result<()> {
-    if let Some(index) = plan
-        .sequence
-        .iter()
-        .position(|node| matches!(node, SequenceNode::Item(item) if item.id == item_id))
-    {
-        plan.sequence.remove(index);
-        return Ok(());
-    }
-
-    for node in &mut plan.sequence {
-        if let SequenceNode::Group(group) = node {
-            if let Some(index) = group.items.iter().position(|item| item.id == item_id) {
-                group.items.remove(index);
-                return Ok(());
-            }
-        }
-    }
-
-    Err(validation_error(format!("item not found: {item_id}")))
-}
-
-fn take_item(plan: &mut Plan, item_id: &str) -> Result<LaunchItem> {
-    if let Some(index) = plan
-        .sequence
-        .iter()
-        .position(|node| matches!(node, SequenceNode::Item(item) if item.id == item_id))
-    {
-        let SequenceNode::Item(item) = plan.sequence.remove(index) else {
-            unreachable!();
-        };
-        return Ok(item);
-    }
-
-    for node in &mut plan.sequence {
-        if let SequenceNode::Group(group) = node {
-            if let Some(index) = group.items.iter().position(|item| item.id == item_id) {
-                return Ok(group.items.remove(index));
-            }
-        }
-    }
-
-    Err(validation_error(format!("item not found: {item_id}")))
 }
 
 fn print_plan_list(entries: &[PlanCatalogEntry], plans: &[Plan]) {

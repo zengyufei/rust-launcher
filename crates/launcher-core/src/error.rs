@@ -26,6 +26,14 @@ pub enum LauncherError {
     #[error("plan not found: {0}")]
     PlanNotFound(String),
 
+    #[error("plan import conflict: {plan_id}")]
+    PlanImportConflict {
+        plan_id: String,
+        plan_name: String,
+        target_file: String,
+        source_path: PathBuf,
+    },
+
     #[error("item not found: {0}")]
     ItemNotFound(String),
 

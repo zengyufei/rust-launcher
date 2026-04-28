@@ -1,134 +1,1146 @@
-import { Button, HorizontalBox, ListView, VerticalBox } from "std-widgets.slint";
+import { ComboBox, HorizontalBox, LineEdit, ListView, VerticalBox } from "std-widgets.slint";
+
+export struct PlanRow {
+    id: string,
+    name: string,
+    meta: string,
+    selected: bool,
+    enabled: bool,
+}
+
+export struct SequenceRow {
+    id: string,
+    kind: string,
+    kind_label: string,
+    title: string,
+    description: string,
+    delay: string,
+    failure: string,
+    target: string,
+    child_primary_title: string,
+    child_primary_meta: string,
+    child_secondary_title: string,
+    child_secondary_meta: string,
+    child_more: string,
+    depth: int,
+    selected: bool,
+}
+
+export struct InspectorRow {
+    label: string,
+    value: string,
+}
+
+export struct LogRow {
+    level: string,
+    message: string,
+}
+
+component Panel inherits Rectangle {
+    background: #ffffff;
+    border-color: #dde4ee;
+    border-width: 1px;
+    border-radius: 8px;
+}
+
+component SelectableText inherits TextInput {
+    in property <brush> text-color: #334155;
+    in property <length> text-size: 12px;
+    in property <int> text-weight: 400;
+    read-only: true;
+    single-line: true;
+    font-family: "Microsoft YaHei UI";
+    color: root.text-color;
+    font-size: root.text-size;
+    font-weight: root.text-weight;
+    selection-background-color: #bfdbfe;
+    selection-foreground-color: #0f172a;
+}
+
+component SectionTitle inherits SelectableText {
+    height: 24px;
+    text-size: 18px;
+    text-weight: 700;
+    text-color: #182033;
+}
+
+component LabelText inherits SelectableText {
+    height: 16px;
+    text-size: 12px;
+    text-color: #60708a;
+}
+
+component PrimaryMiniButton inherits Rectangle {
+    in property <string> text;
+    in property <image> icon: @image-url("icons/plus-white.svg");
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 104px;
+    height: 34px;
+    background: !root.enabled ? #cbd5e1 : (button-touch.pressed ? #1557b8 : (button-touch.has-hover ? #2f7df1 : #1f6feb));
+    border-radius: 6px;
+
+    Image {
+        x: 12px;
+        y: 9px;
+        width: 14px;
+        height: 14px;
+        source: root.icon;
+    }
+
+    Text {
+        x: 30px;
+        width: parent.width - 34px;
+        text: root.text;
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    button-touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+component PlanMenuRow inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> danger;
+    in property <bool> emphasized;
+    callback clicked();
+
+    height: root.emphasized ? 34px : 32px;
+    background: root.danger ? (menu-touch.pressed ? #ffe4e6 : (menu-touch.has-hover ? #fff1f2 : #fff7f8)) : (menu-touch.pressed ? #e2e8f0 : (menu-touch.has-hover ? #f8fafc : (root.emphasized ? #f8fafc : #ffffff)));
+    border-radius: 6px;
+
+    Image {
+        x: 10px;
+        y: (parent.height - 14px) / 2;
+        width: 14px;
+        height: 14px;
+        source: root.icon;
+    }
+
+    Text {
+        x: 32px;
+        width: parent.width - 42px;
+        text: root.text;
+        color: root.danger ? #be123c : (root.emphasized ? #0f172a : #334155);
+        font-size: 13px;
+        font-weight: root.emphasized ? 600 : 400;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    menu-touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component DialogButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> danger;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    width: root.primary ? 104px : 86px;
+    height: 34px;
+    background: !root.enabled ? #cbd5e1 : (root.danger ? (button-touch.pressed ? #be123c : (button-touch.has-hover ? #f43f5e : #e11d48)) : (root.primary ? (button-touch.pressed ? #1557b8 : (button-touch.has-hover ? #2f7df1 : #1f6feb)) : (button-touch.pressed ? #e2e8f0 : (button-touch.has-hover ? #f8fafc : #ffffff))));
+    border-color: root.primary || root.danger ? #00000000 : #cbd5e1;
+    border-width: root.primary || root.danger ? 0px : 1px;
+    border-radius: 6px;
+
+    Text {
+        text: root.text;
+        color: root.primary || root.danger ? #ffffff : #334155;
+        font-size: 13px;
+        font-weight: root.primary || root.danger ? 700 : 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    button-touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
 
 export component AppWindow inherits Window {
-    width: 1040px;
-    height: 680px;
-    title: "Rust Launcher";
+    preferred-width: 1440px;
+    preferred-height: 960px;
+    min-width: 1180px;
+    min-height: 640px;
+    max-width: 100000px;
+    max-height: 100000px;
+    title: "Rust 启动器";
+    default-font-family: "Microsoft YaHei UI";
 
     in property <string> data-dir;
-    in property <[string]> plan-names;
-    in property <[string]> launch-modes;
-    in property <string> plan-details;
-    in property <string> status;
+    in property <string> selected-plan-title;
+    in property <string> selected-plan-file;
+    in property <bool> running;
+    in property <[PlanRow]> plan-rows;
+    in property <[SequenceRow]> sequence-rows;
+    in property <bool> has-selection;
+    in property <string> selection-summary;
+    in property <[InspectorRow]> launch-rows;
+    in property <bool> schedule-visible;
+    in property <[InspectorRow]> schedule-rows;
+    in property <[LogRow]> log-rows;
+    in property <bool> context-menu-visible;
+    in property <string> context-plan-id;
+    in property <bool> context-plan-enabled;
+    in property <string> modal-kind;
+    in property <string> modal-plan-id;
+    in property <string> modal-node-id;
+    in property <string> modal-plan-name;
+    in property <string> modal-plan-file;
+    in property <string> modal-error;
+    in property <string> import-conflict-name;
+    in property <string> import-conflict-file;
+    in property <string> import-conflict-source;
+    in-out property <string> create-plan-name;
+    in-out property <string> create-plan-id;
+    in-out property <string> create-plan-file;
+    in-out property <string> rename-plan-name;
+    in-out property <string> item-form-kind;
+    in-out property <string> item-form-id;
+    in-out property <string> item-form-name;
+    in-out property <string> item-form-description;
+    in-out property <string> item-form-target;
+    in-out property <string> item-form-args;
+    in-out property <string> item-form-working-dir;
+    in-out property <string> item-form-shell;
+    in-out property <string> group-form-id;
+    in-out property <string> group-form-name;
+    in-out property <string> group-form-description;
+    in-out property <string> form-pre-delay-ms;
+    in-out property <string> form-post-delay-ms;
+    in-out property <string> form-on-failure;
+    in-out property <string> schedule-form-index;
+    in-out property <string> schedule-form-kind;
+    in-out property <string> schedule-form-time;
+    in-out property <string> schedule-form-weekday;
+    in-out property <string> schedule-form-at;
 
-    callback refresh();
-    callback run-dry();
+    callback select-plan(string);
+    callback select-node(string);
+    callback run-selected();
+    callback unavailable(string);
+    callback open-create-plan();
+    callback open-import-plan();
+    callback open-plan-menu(string);
+    callback close-plan-menu();
+    callback plan-menu-action(string, string);
+    callback close-modal();
+    callback create-plan(string, string, string);
+    callback rename-plan(string, string);
+    callback delete-plan(string);
+    callback confirm-import-overwrite();
+    callback open-add-item();
+    callback open-edit-node(string);
+    callback item-kind-changed(string);
+    callback save-item(string, string, string, string, string, string, string, string, string, string, string);
+    callback save-group(string, string, string, string, string, string);
+    callback set-failure-policy(string);
+    callback set-command-shell(string);
+    callback set-launch-trigger(string);
+    callback open-schedule-modal();
+    callback schedule-kind-changed(string);
+    callback edit-schedule(string);
+    callback delete-schedule(string);
+    callback save-schedule(string, string, string, string, string);
+    callback bulk-action(string);
 
     background: #f7f8fb;
 
     VerticalBox {
-        padding: 18px;
-        spacing: 14px;
+        padding: 0px;
+        spacing: 0px;
 
-        VerticalBox {
-            spacing: 10px;
-            VerticalBox {
-                spacing: 4px;
-                Text {
-                    text: "Rust Launcher";
-                    font-size: 28px;
-                    font-weight: 700;
-                    color: #182033;
-                }
-                Text {
-                    text: root.data-dir;
-                    font-size: 13px;
-                    color: #60708a;
-                }
-            }
+        Rectangle {
+            height: 86px;
+            vertical-stretch: 0;
+            background: #ffffff;
+            border-color: #e3e8f0;
+            border-width: 1px;
 
             HorizontalBox {
-                spacing: 8px;
-                Button {
-                    text: "刷新";
-                    clicked => { root.refresh(); }
+                padding: 18px;
+                spacing: 16px;
+
+                VerticalBox {
+                    spacing: 6px;
+                    SelectableText {
+                        text: "Rust 启动器";
+                        text-size: 26px;
+                        text-weight: 700;
+                        text-color: #182033;
+                        height: 32px;
+                    }
+                    SelectableText {
+                        text: "JSON 驱动的快速启动与方案编排";
+                        text-size: 14px;
+                        text-color: #60708a;
+                        height: 20px;
+                    }
                 }
-                Button {
-                    text: "Dry Run";
-                    clicked => { root.run-dry(); }
+
+                Rectangle {
+                    width: 116px;
+                    height: 38px;
+                    background: root.running ? #8eb8f5 : (run-touch.pressed ? #1557b8 : (run-touch.has-hover ? #2f7df1 : #1f6feb));
+                    border-radius: 6px;
+
+                    Image {
+                        x: 16px;
+                        y: 11px;
+                        width: 16px;
+                        height: 16px;
+                        source: @image-url("icons/rocket-white.svg");
+                    }
+
+                    Text {
+                        x: 40px;
+                        width: parent.width - 48px;
+                        text: root.running ? "运行中..." : "运行方案";
+                        color: #ffffff;
+                        font-size: 14px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    run-touch := TouchArea {
+                        enabled: !root.running;
+                        clicked => {
+                            root.run-selected();
+                        }
+                    }
                 }
             }
         }
 
         HorizontalBox {
+            padding: 18px;
             spacing: 14px;
+            vertical-stretch: 1;
 
-            Rectangle {
-                width: 260px;
-                background: white;
-                border-color: #dbe2ee;
-                border-width: 1px;
-                border-radius: 8px;
+            Panel {
+                width: 286px;
+                vertical-stretch: 1;
 
                 VerticalBox {
-                    padding: 12px;
-                    spacing: 10px;
-                    Text {
-                        text: "方案";
-                        font-size: 17px;
-                        font-weight: 700;
-                        color: #182033;
+                    padding: 14px;
+                    spacing: 12px;
+
+                    HorizontalBox {
+                        spacing: 8px;
+                        Image {
+                            width: 18px;
+                            height: 18px;
+                            source: @image-url("icons/layout-list.svg");
+                        }
+                        SectionTitle {
+                            text: "方案";
+                            horizontal-stretch: 1;
+                        }
                     }
+
+                    Rectangle {
+                        height: 38px;
+                        background: #f4f6fa;
+                        border-color: #e0e6ef;
+                        border-width: 1px;
+                        border-radius: 6px;
+
+                        Text {
+                            x: 36px;
+                            y: 10px;
+                            text: "搜索方案或启动项";
+                            color: #7b8798;
+                            font-size: 13px;
+                        }
+                        Image {
+                            x: 12px;
+                            y: 11px;
+                            width: 16px;
+                            height: 16px;
+                            source: @image-url("icons/search.svg");
+                        }
+                    }
+
                     ListView {
-                        for name in root.plan-names: Rectangle {
-                            height: 34px;
+                        vertical-stretch: 1;
+                        for row in root.plan-rows: Rectangle {
+                            height: 62px;
+                            background: row.selected ? #eaf3ff : (plan-touch.has-hover ? #f8fbff : #ffffff);
+                            border-color: row.selected ? #8eb8f5 : (plan-touch.has-hover ? #bfd8f4 : #e6ebf2);
+                            border-width: 1px;
+                            border-radius: 7px;
+
+                            Image {
+                                x: 10px;
+                                y: 11px;
+                                width: 16px;
+                                height: 16px;
+                                source: @image-url("icons/briefcase.svg");
+                            }
                             Text {
-                                text: name;
-                                color: #263247;
+                                x: 34px;
+                                y: 9px;
+                                width: parent.width - 46px;
+                                text: row.id + "  " + row.name;
+                                color: row.enabled ? #263247 : #8a94a6;
+                                font-size: 14px;
+                                font-weight: 600;
+                                overflow: elide;
+                            }
+                            Text {
+                                x: 12px;
+                                y: 36px;
+                                width: parent.width - 24px;
+                                text: row.meta;
+                                color: #60708a;
+                                font-size: 11px;
+                                overflow: elide;
+                            }
+
+                            plan-touch := TouchArea {
+                                clicked => {
+                                    root.select-plan(row.id);
+                                }
+                                pointer-event(event) => {
+                                    if event.button == PointerEventButton.right && event.kind == PointerEventKind.up {
+                                        root.open-plan-menu(row.id);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalBox {
+                        height: 34px;
+                        spacing: 10px;
+                        PrimaryMiniButton {
+                            text: "新建方案";
+                            width: 124px;
+                            enabled: !root.running;
+                            clicked => { root.open-create-plan(); }
+                        }
+                        PrimaryMiniButton {
+                            text: "导入方案";
+                            icon: @image-url("icons/import-white.svg");
+                            width: 124px;
+                            enabled: !root.running;
+                            clicked => { root.open-import-plan(); }
+                        }
+                    }
+                }
+            }
+
+            Panel {
+                horizontal-stretch: 1;
+                vertical-stretch: 1;
+
+                VerticalBox {
+                    padding: 14px;
+                    spacing: 12px;
+
+                    HorizontalBox {
+                        spacing: 10px;
+                        VerticalBox {
+                            spacing: 4px;
+                            horizontal-stretch: 1;
+                            HorizontalBox {
+                                spacing: 10px;
+                                Image {
+                                    width: 20px;
+                                    height: 20px;
+                                    source: @image-url("icons/workflow.svg");
+                                }
+                                SectionTitle { text: root.selected-plan-title; }
+                            }
+                            LabelText { text: "方案结构"; }
+                        }
+
+                        PrimaryMiniButton {
+                            text: "新增启动项";
+                            width: 112px;
+                            clicked => { root.open-add-item(); }
+                        }
+                    }
+
+                    Rectangle {
+                        height: 42px;
+                        background: #f7f8fb;
+                        border-color: #e3e8f0;
+                        border-width: 1px;
+                        border-radius: 6px;
+                        SelectableText {
+                            x: 40px;
+                            y: 12px;
+                            width: parent.width - 52px;
+                            height: parent.height - 24px;
+                            text: root.selected-plan-file;
+                            text-color: #263247;
+                            text-size: 13px;
+                            vertical-alignment: center;
+                        }
+                        Image {
+                            x: 14px;
+                            y: 13px;
+                            width: 16px;
+                            height: 16px;
+                            source: @image-url("icons/braces.svg");
+                        }
+                    }
+
+                    if root.has-selection: Rectangle {
+                        height: 42px;
+                        background: #eef4ff;
+                        border-color: #bfd8f4;
+                        border-width: 1px;
+                        border-radius: 7px;
+
+                        HorizontalBox {
+                            padding: 6px;
+                            spacing: 8px;
+                            Text {
+                                text: root.selection-summary;
+                                color: #1c5fa8;
+                                font-size: 13px;
+                                font-weight: 700;
                                 vertical-alignment: center;
+                                horizontal-stretch: 1;
+                            }
+                            Rectangle {
+                                width: 62px;
+                                height: 30px;
+                                background: bulk-delete-touch.pressed ? #ffd6d6 : (bulk-delete-touch.has-hover ? #ffe4e4 : #fff0f0);
+                                border-color: bulk-delete-touch.has-hover ? #e79a9a : #f0b8b8;
+                                border-width: 1px;
+                                border-radius: 6px;
+                                Image {
+                                    x: 9px;
+                                    y: 8px;
+                                    width: 13px;
+                                    height: 13px;
+                                    source: @image-url("icons/trash-red.svg");
+                                }
+                                Text {
+                                    x: 28px;
+                                    width: parent.width - 32px;
+                                    text: "删除";
+                                    color: #a32020;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                bulk-delete-touch := TouchArea { clicked => { root.bulk-action("删除"); } }
+                            }
+                            Rectangle {
+                                width: 50px;
+                                height: 30px;
+                                background: bulk-group-touch.pressed ? #dfeeff : (bulk-group-touch.has-hover ? #eef6ff : #ffffff);
+                                border-color: bulk-group-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                border-width: 1px;
+                                border-radius: 6px;
+                                Text {
+                                    text: "组合";
+                                    color: #1c5fa8;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                bulk-group-touch := TouchArea { clicked => { root.bulk-action("组合"); } }
+                            }
+                            Rectangle {
+                                width: 76px;
+                                height: 30px;
+                                background: bulk-ungroup-touch.pressed ? #dfeeff : (bulk-ungroup-touch.has-hover ? #eef6ff : #ffffff);
+                                border-color: bulk-ungroup-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                border-width: 1px;
+                                border-radius: 6px;
+                                Text {
+                                    text: "取消组合";
+                                    color: #1c5fa8;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                bulk-ungroup-touch := TouchArea { clicked => { root.bulk-action("取消组合"); } }
+                            }
+                            Rectangle {
+                                width: 62px;
+                                height: 30px;
+                                background: bulk-up-touch.pressed ? #dfeeff : (bulk-up-touch.has-hover ? #eef6ff : #ffffff);
+                                border-color: bulk-up-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                border-width: 1px;
+                                border-radius: 6px;
+                                Image {
+                                    x: 9px;
+                                    y: 8px;
+                                    width: 13px;
+                                    height: 13px;
+                                    source: @image-url("icons/arrow-up-blue.svg");
+                                }
+                                Text {
+                                    x: 28px;
+                                    width: parent.width - 32px;
+                                    text: "上移";
+                                    color: #1c5fa8;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                bulk-up-touch := TouchArea { clicked => { root.bulk-action("上移"); } }
+                            }
+                            Rectangle {
+                                width: 62px;
+                                height: 30px;
+                                background: bulk-down-touch.pressed ? #dfeeff : (bulk-down-touch.has-hover ? #eef6ff : #ffffff);
+                                border-color: bulk-down-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                border-width: 1px;
+                                border-radius: 6px;
+                                Image {
+                                    x: 9px;
+                                    y: 8px;
+                                    width: 13px;
+                                    height: 13px;
+                                    source: @image-url("icons/arrow-down-blue.svg");
+                                }
+                                Text {
+                                    x: 28px;
+                                    width: parent.width - 32px;
+                                    text: "下移";
+                                    color: #1c5fa8;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                bulk-down-touch := TouchArea { clicked => { root.bulk-action("下移"); } }
+                            }
+                            Rectangle {
+                                width: 50px;
+                                height: 30px;
+                                background: bulk-top-touch.pressed ? #dfeeff : (bulk-top-touch.has-hover ? #eef6ff : #ffffff);
+                                border-color: bulk-top-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                border-width: 1px;
+                                border-radius: 6px;
+                                Text {
+                                    text: "置顶";
+                                    color: #1c5fa8;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                bulk-top-touch := TouchArea { clicked => { root.bulk-action("置顶"); } }
+                            }
+                            Rectangle {
+                                width: 50px;
+                                height: 30px;
+                                background: bulk-bottom-touch.pressed ? #dfeeff : (bulk-bottom-touch.has-hover ? #eef6ff : #ffffff);
+                                border-color: bulk-bottom-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                border-width: 1px;
+                                border-radius: 6px;
+                                Text {
+                                    text: "置底";
+                                    color: #1c5fa8;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                bulk-bottom-touch := TouchArea { clicked => { root.bulk-action("置底"); } }
+                            }
+                        }
+                    }
+
+                    ListView {
+                        height: root.has-selection ? 446px : 500px;
+                        vertical-stretch: 0;
+                        for row in root.sequence-rows: row-frame := Rectangle {
+                            height: row.kind == "group" ? 216px : 116px;
+                            background: #ffffff;
+
+                            card := Rectangle {
+                                x: 0px;
+                                y: 0px;
+                                width: parent.width;
+                                height: row.kind == "group" ? 206px : 106px;
+                                background: row.selected ? #eef4ff : (row-touch.has-hover ? (row.kind == "group" ? #fff2dc : #f8fbff) : (row.kind == "group" ? #fff7ea : #ffffff));
+                                border-color: row.selected ? #9ec7f4 : (row-touch.has-hover ? (row.kind == "group" ? #e7bd78 : #bfd8f4) : (row.kind == "group" ? #f0d1a1 : #dde4ee));
+                                border-width: 1px;
+                                border-radius: 8px;
+
+                                row-touch := TouchArea {
+                                    clicked => {
+                                        root.select-node(row.id);
+                                    }
+                                }
+
+                                Rectangle {
+                                    x: 12px;
+                                    y: 14px;
+                                    width: 18px;
+                                    height: 18px;
+                                    background: row.selected ? #1f6feb : (row-touch.has-hover ? #f8fbff : #ffffff);
+                                    border-color: row.selected ? #1f6feb : (row-touch.has-hover ? #7aaeea : #b7c2d0);
+                                    border-width: 1px;
+                                    border-radius: 4px;
+                                    if row.selected: Rectangle {
+                                        x: 5px;
+                                        y: 5px;
+                                        width: 8px;
+                                        height: 8px;
+                                        background: #ffffff;
+                                        border-radius: 2px;
+                                    }
+                                }
+
+                                Rectangle {
+                                    x: 42px;
+                                    y: 12px;
+                                    width: row.kind == "group" ? 58px : 54px;
+                                    height: 24px;
+                                    background: row.kind == "group" ? #fff4e3 : (row.kind_label == "路径" ? #eaf3ff : #f2f5f9);
+                                    border-color: row.kind == "group" ? #f0d1a1 : (row.kind_label == "路径" ? #bfd8f4 : #d8dee8);
+                                    border-width: 1px;
+                                    border-radius: 12px;
+                                    Text {
+                                        text: row.kind_label;
+                                        color: row.kind == "group" ? #92400e : #1d4ed8;
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Text {
+                                    x: row.kind == "group" ? 110px : 106px;
+                                    y: 13px;
+                                    width: parent.width - (row.kind == "group" ? 306px : 292px);
+                                    height: 22px;
+                                    text: row.title;
+                                    color: #182033;
+                                    font-size: 14px;
+                                    font-weight: 700;
+                                    overflow: elide;
+                                    vertical-alignment: center;
+                                }
+
+                                Rectangle {
+                                    x: parent.width - (row.failure == "stop" ? 154px : 168px);
+                                    y: 12px;
+                                    width: row.failure == "stop" ? 64px : 78px;
+                                    height: 24px;
+                                    background: row.failure == "stop" ? #fff0f0 : #eaf7ef;
+                                    border-color: row.failure == "stop" ? #f0b8b8 : #bfe3cc;
+                                    border-width: 1px;
+                                    border-radius: 12px;
+                                    Text {
+                                        text: row.failure == "stop" ? "停止" : "继续";
+                                        color: row.failure == "stop" ? #a32020 : #166534;
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Rectangle {
+                                    x: parent.width - 78px;
+                                    y: 10px;
+                                    width: row.kind == "group" ? 66px : 58px;
+                                    height: 32px;
+                                    background: edit-touch.pressed ? (row.kind == "group" ? #ffe3b3 : #dfe7f2) : (edit-touch.has-hover ? (row.kind == "group" ? #ffeacc : #e8eef7) : (row.kind == "group" ? #fff4e3 : #f2f5f9));
+                                    border-color: edit-touch.has-hover ? (row.kind == "group" ? #e7bd78 : #b7c2d0) : (row.kind == "group" ? #f0d1a1 : #d8dee8);
+                                    border-width: 1px;
+                                    border-radius: 6px;
+                                    Image {
+                                        x: row.kind == "group" ? 8px : 9px;
+                                        y: 9px;
+                                        width: 14px;
+                                        height: 14px;
+                                        source: @image-url("icons/pencil.svg");
+                                    }
+                                    Text {
+                                        x: row.kind == "group" ? 26px : 26px;
+                                        width: parent.width - 30px;
+                                        text: row.kind == "group" ? "编辑组" : "编辑";
+                                        color: row.kind == "group" ? #805000 : #263247;
+                                        font-size: 12px;
+                                        font-weight: 700;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                    edit-touch := TouchArea {
+                                        clicked => {
+                                            root.open-edit-node(row.id);
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    x: 42px;
+                                    y: 44px;
+                                    width: parent.width - 120px;
+                                    height: 18px;
+                                    text: row.description;
+                                    color: row.kind == "group" ? #805000 : #60708a;
+                                    font-size: 12px;
+                                    overflow: elide;
+                                }
+
+                                if row.kind == "group": Rectangle {
+                                    x: 42px;
+                                    y: 68px;
+                                    width: parent.width - 120px;
+                                    height: 42px;
+                                    background: #ffffff;
+                                    border-color: #f0d1a1;
+                                    border-width: 1px;
+                                    border-radius: 6px;
+                                    Rectangle {
+                                        x: 8px;
+                                        y: 15px;
+                                        width: 12px;
+                                        height: 12px;
+                                        background: #805000;
+                                        border-radius: 3px;
+                                    }
+                                    Text {
+                                        x: 28px;
+                                        y: 4px;
+                                        width: parent.width - 36px;
+                                        height: 16px;
+                                        text: row.child_primary_title;
+                                        color: #805000;
+                                        font-size: 10px;
+                                        font-weight: 700;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    Text {
+                                        x: 28px;
+                                        y: 22px;
+                                        width: parent.width - 36px;
+                                        height: 15px;
+                                        text: row.child_primary_meta;
+                                        color: #805000;
+                                        font-size: 10px;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                if row.kind == "group" && row.child_secondary_title != "": Rectangle {
+                                    x: 42px;
+                                    y: 115px;
+                                    width: parent.width - 120px;
+                                    height: 42px;
+                                    background: #ffffff;
+                                    border-color: #f0d1a1;
+                                    border-width: 1px;
+                                    border-radius: 6px;
+                                    Rectangle {
+                                        x: 8px;
+                                        y: 15px;
+                                        width: 12px;
+                                        height: 12px;
+                                        background: #805000;
+                                        border-radius: 3px;
+                                    }
+                                    Text {
+                                        x: 28px;
+                                        y: 4px;
+                                        width: parent.width - 36px;
+                                        height: 16px;
+                                        text: row.child_secondary_title;
+                                        color: #805000;
+                                        font-size: 10px;
+                                        font-weight: 700;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    Text {
+                                        x: 28px;
+                                        y: 22px;
+                                        width: parent.width - 36px;
+                                        height: 15px;
+                                        text: row.child_secondary_meta;
+                                        color: #805000;
+                                        font-size: 10px;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                if row.kind == "group" && row.child_more != "": Text {
+                                    x: 42px;
+                                    y: 160px;
+                                    width: parent.width - 120px;
+                                    height: 14px;
+                                    text: row.child_more;
+                                    color: #805000;
+                                    font-size: 10px;
+                                    overflow: elide;
+                                }
+
+                                Rectangle {
+                                    x: 42px;
+                                    y: row.kind == "group" ? 176px : 72px;
+                                    width: row.kind == "group" ? 182px : 138px;
+                                    height: 24px;
+                                    background: row.kind == "group" ? #ffffff : #f7f8fb;
+                                    border-color: row.kind == "group" ? #f0d1a1 : #e3e8f0;
+                                    border-width: 1px;
+                                    border-radius: 12px;
+                                    Text {
+                                        x: 8px;
+                                        width: parent.width - 16px;
+                                        height: parent.height;
+                                        text: row.delay;
+                                        color: #334155;
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                Rectangle {
+                                    x: row.kind == "group" ? 234px : 190px;
+                                    y: row.kind == "group" ? 176px : 72px;
+                                    width: parent.width - (row.kind == "group" ? 312px : 268px);
+                                    height: 24px;
+                                    background: row.kind == "group" ? #ffffff : #f7f8fb;
+                                    border-color: row.kind == "group" ? #f0d1a1 : #e3e8f0;
+                                    border-width: 1px;
+                                    border-radius: 12px;
+                                    Text {
+                                        x: 8px;
+                                        width: parent.width - 16px;
+                                        height: parent.height;
+                                        text: row.target;
+                                        color: #334155;
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
 
-            Rectangle {
-                width: 430px;
-                background: white;
-                border-color: #dbe2ee;
-                border-width: 1px;
-                border-radius: 8px;
+            Panel {
+                width: 338px;
+                vertical-stretch: 1;
 
                 VerticalBox {
-                    padding: 12px;
+                    padding: 14px;
                     spacing: 10px;
-                    Text {
-                        text: "结构预览";
-                        font-size: 17px;
-                        font-weight: 700;
-                        color: #182033;
-                    }
-                    Text {
-                        text: root.plan-details;
-                        font-size: 13px;
-                        color: #263247;
-                        wrap: word-wrap;
-                    }
-                }
-            }
 
-            Rectangle {
-                background: white;
-                border-color: #dbe2ee;
-                border-width: 1px;
-                border-radius: 8px;
-
-                VerticalBox {
-                    padding: 12px;
-                    spacing: 10px;
-                    Text {
-                        text: "启动方式";
-                        font-size: 17px;
-                        font-weight: 700;
-                        color: #182033;
+                    HorizontalBox {
+                        spacing: 8px;
+                        Image {
+                            width: 18px;
+                            height: 18px;
+                            source: @image-url("icons/sliders.svg");
+                        }
+                        SectionTitle { text: "属性与启动方式"; }
                     }
-                    ListView {
-                        for mode in root.launch-modes: Rectangle {
-                            height: 34px;
-                            Text {
-                                text: mode;
-                                color: #263247;
-                                vertical-alignment: center;
+
+                    Rectangle {
+                        background: #ffffff;
+                        border-color: #e3e8f0;
+                        border-width: 1px;
+                        border-radius: 8px;
+                        height: 154px;
+
+                        VerticalBox {
+                            padding: 12px;
+                            spacing: 7px;
+                            SelectableText {
+                                text: "方案启动";
+                                text-color: #182033;
+                                text-size: 14px;
+                                text-weight: 700;
+                                height: 20px;
+                            }
+                            SelectableText {
+                                text: "点击任一启动方式可修改";
+                                text-color: #60708a;
+                                text-size: 11px;
+                                height: 16px;
+                            }
+                            for row in root.launch-rows: Rectangle {
+                                height: 32px;
+                                background: row.value == "selected" ? #eaf3ff : (launch-row-touch.has-hover ? #f8fbff : #f2f5f9);
+                                border-color: row.value == "selected" ? #bfd8f4 : (launch-row-touch.has-hover ? #bfd8f4 : #e3e8f0);
+                                border-width: 1px;
+                                border-radius: 7px;
+                                Image {
+                                    x: 8px;
+                                    y: 8px;
+                                    width: 16px;
+                                    height: 16px;
+                                    source: row.value == "selected" ? @image-url("icons/circle-dot.svg") : @image-url("icons/circle.svg");
+                                }
+                                Text {
+                                    x: 32px;
+                                    y: 0px;
+                                    width: parent.width - 62px;
+                                    height: parent.height;
+                                    text: row.label;
+                                    color: row.value == "selected" ? #1d4ed8 : #334155;
+                                    font-size: 13px;
+                                    font-weight: 700;
+                                    vertical-alignment: center;
+                                }
+                                Image {
+                                    x: parent.width - 22px;
+                                    y: 9px;
+                                    width: 14px;
+                                    height: 14px;
+                                    source: @image-url("icons/chevron-right.svg");
+                                }
+                                launch-row-touch := TouchArea {
+                                    clicked => {
+                                        root.set-launch-trigger(row.label);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.schedule-visible: Rectangle {
+                        background: schedule-card-touch.has-hover ? #fff2dc : #fff7ea;
+                        border-color: schedule-card-touch.has-hover ? #e7bd78 : #f0d1a1;
+                        border-width: 1px;
+                        border-radius: 8px;
+                        min-height: 138px;
+                        vertical-stretch: 1;
+
+                        VerticalBox {
+                            padding: 12px;
+                            spacing: 7px;
+                            HorizontalBox {
+                                spacing: 8px;
+                                Image {
+                                    width: 16px;
+                                    height: 16px;
+                                    source: @image-url("icons/alarm.svg");
+                                }
+                                Text {
+                                    text: "定时任务";
+                                    color: #92400e;
+                                    font-size: 14px;
+                                    font-weight: 700;
+                                    horizontal-stretch: 1;
+                                }
+                                Text {
+                                    text: "编辑";
+                                    color: #1d4ed8;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                }
+                            }
+                            ListView {
+                                vertical-stretch: 1;
+                                for row in root.schedule-rows: Rectangle {
+                                    height: 28px;
+                                    background: #ffffff;
+                                    border-color: #f0d1a1;
+                                    border-width: 1px;
+                                    border-radius: 7px;
+                                    Text {
+                                        x: 8px;
+                                        y: 6px;
+                                        width: parent.width - 16px;
+                                        text: row.value;
+                                        color: #334155;
+                                        font-size: 12px;
+                                        font-weight: 700;
+                                        overflow: elide;
+                                    }
+                                }
+                            }
+                            SelectableText {
+                                text: "仅在应用启动自动时显示并生效。";
+                                text-color: #805000;
+                                text-size: 11px;
+                                height: 16px;
+                            }
+                        }
+
+                        schedule-card-touch := TouchArea {
+                            enabled: !root.running;
+                            clicked => {
+                                root.open-schedule-modal();
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        background: #f7f8fb;
+                        border-color: #e3e8f0;
+                        border-width: 1px;
+                        border-radius: 8px;
+                        height: 132px;
+
+                        VerticalBox {
+                            padding: 12px;
+                            spacing: 7px;
+                            HorizontalBox {
+                                spacing: 8px;
+                                Image {
+                                    width: 16px;
+                                    height: 16px;
+                                    source: @image-url("icons/braces.svg");
+                                }
+                                SelectableText {
+                                    text: "JSON 存储";
+                                    text-color: #182033;
+                                    text-size: 14px;
+                                    text-weight: 700;
+                                    height: 20px;
+                                }
+                            }
+                            SelectableText {
+                                text: "global.json: 全局设置与启动方式";
+                                text-color: #263247;
+                                text-size: 13px;
+                                height: 18px;
+                            }
+                            SelectableText {
+                                text: root.selected-plan-file;
+                                text-color: #263247;
+                                text-size: 13px;
+                                height: 18px;
+                            }
+                            SelectableText {
+                                text: root.data-dir;
+                                text-color: #60708a;
+                                text-size: 11px;
+                                height: 16px;
                             }
                         }
                     }
@@ -137,19 +1149,1055 @@ export component AppWindow inherits Window {
         }
 
         Rectangle {
-            height: 74px;
+            height: 200px;
+            vertical-stretch: 0;
             background: #eef4ff;
-            border-color: #c8d9f5;
+            border-color: #c7d8f2;
+            border-width: 1px;
+
+            VerticalBox {
+                padding: 8px;
+                spacing: 4px;
+                SelectableText {
+                    text: "执行日志";
+                    text-color: #1f3b64;
+                    text-size: 14px;
+                    text-weight: 700;
+                    height: 20px;
+                }
+                ListView {
+                    height: 154px;
+                    vertical-stretch: 0;
+                    for row in root.log-rows: Rectangle {
+                        height: 24px;
+                        background: #00000000;
+
+                        SelectableText {
+                            x: 0px;
+                            y: 3px;
+                            width: parent.width - 10px;
+                            height: 18px;
+                            text: row.message;
+                            text-color: row.level == "error" ? #a32020 : #1f3b64;
+                            text-size: 12px;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if root.context-menu-visible: Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        background: #00000000;
+        TouchArea {
+            clicked => {
+                root.close-plan-menu();
+            }
+        }
+    }
+
+    if root.context-menu-visible: Rectangle {
+        x: 302px;
+        y: 212px;
+        width: 184px;
+        height: 294px;
+        background: #ffffff;
+        border-color: #cbd5e1;
+        border-width: 1px;
+        border-radius: 8px;
+
+        VerticalBox {
+            padding: 6px;
+            spacing: 2px;
+
+            PlanMenuRow {
+                text: "编辑方案";
+                icon: @image-url("icons/pencil.svg");
+                emphasized: true;
+                clicked => { root.plan-menu-action(root.context-plan-id, "编辑方案"); }
+            }
+            PlanMenuRow {
+                text: "导出方案";
+                icon: @image-url("icons/export-gray.svg");
+                emphasized: true;
+                clicked => { root.plan-menu-action(root.context-plan-id, "导出方案"); }
+            }
+            PlanMenuRow {
+                text: "删除方案";
+                icon: @image-url("icons/trash-red.svg");
+                danger: true;
+                emphasized: true;
+                clicked => { root.plan-menu-action(root.context-plan-id, "删除方案"); }
+            }
+            Rectangle {
+                height: 1px;
+                background: #e2e8f0;
+            }
+            PlanMenuRow {
+                text: "置顶";
+                icon: @image-url("icons/chevrons-up-gray.svg");
+                clicked => { root.plan-menu-action(root.context-plan-id, "置顶"); }
+            }
+            PlanMenuRow {
+                text: "上移";
+                icon: @image-url("icons/chevron-up-gray.svg");
+                clicked => { root.plan-menu-action(root.context-plan-id, "上移"); }
+            }
+            PlanMenuRow {
+                text: "下移";
+                icon: @image-url("icons/chevron-down-gray.svg");
+                clicked => { root.plan-menu-action(root.context-plan-id, "下移"); }
+            }
+            PlanMenuRow {
+                text: "置底";
+                icon: @image-url("icons/chevrons-down-gray.svg");
+                clicked => { root.plan-menu-action(root.context-plan-id, "置底"); }
+            }
+            Rectangle {
+                height: 1px;
+                background: #e2e8f0;
+            }
+            PlanMenuRow {
+                text: root.context-plan-enabled ? "禁用方案" : "启用方案";
+                icon: @image-url("icons/power-off-gray.svg");
+                clicked => { root.plan-menu-action(root.context-plan-id, root.context-plan-enabled ? "禁用方案" : "启用方案"); }
+            }
+        }
+    }
+
+    if root.modal-kind != "": Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        background: #0f172a66;
+    }
+
+    if root.modal-kind == "create": Rectangle {
+        x: (root.width - 440px) / 2;
+        y: (root.height - 420px) / 2;
+        width: 440px;
+        height: 420px;
+        background: #ffffff;
+        border-color: #e2e8f0;
+        border-width: 1px;
+        border-radius: 10px;
+
+        Rectangle {
+            x: 22px;
+            y: 22px;
+            width: 34px;
+            height: 34px;
+            background: #eff6ff;
+            border-radius: 8px;
+            Image {
+                x: 8px;
+                y: 8px;
+                width: 18px;
+                height: 18px;
+                source: @image-url("icons/plus-dark.svg");
+            }
+        }
+
+        SelectableText {
+            x: 68px;
+            y: 24px;
+            width: 336px;
+            height: 24px;
+            text: "新建方案";
+            text-color: #0f172a;
+            text-size: 18px;
+            text-weight: 700;
+            vertical-alignment: center;
+        }
+        SelectableText {
+            x: 68px;
+            y: 49px;
+            width: 336px;
+            height: 18px;
+            text: "创建时填写名称、标识和 JSON 文件路径";
+            text-color: #64748b;
+            text-size: 12px;
+            vertical-alignment: center;
+        }
+
+        SelectableText { x: 22px; y: 102px; width: 396px; height: 18px; text: "方案名称"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit {
+            x: 22px;
+            y: 128px;
+            width: 396px;
+            height: 38px;
+            text <=> root.create-plan-name;
+        }
+        SelectableText { x: 22px; y: 182px; width: 396px; height: 18px; text: "方案标识"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit {
+            x: 22px;
+            y: 208px;
+            width: 396px;
+            height: 38px;
+            text <=> root.create-plan-id;
+        }
+        SelectableText { x: 22px; y: 262px; width: 396px; height: 18px; text: "方案文件"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit {
+            x: 22px;
+            y: 288px;
+            width: 396px;
+            height: 38px;
+            text <=> root.create-plan-file;
+        }
+
+        SelectableText {
+            x: 22px;
+            y: 346px;
+            width: 396px;
+            height: 34px;
+            text: root.modal-error == "" ? "创建后标识和文件路径将作为方案稳定标识，后续编辑弹窗中只读。" : root.modal-error;
+            text-color: root.modal-error == "" ? #64748b : #be123c;
+            text-size: 12px;
+            wrap: word-wrap;
+            single-line: false;
+        }
+
+        DialogButton {
+            x: 218px;
+            y: 364px;
+            text: "取消";
+            clicked => { root.close-modal(); }
+        }
+        DialogButton {
+            x: 314px;
+            y: 364px;
+            text: "创建方案";
+            primary: true;
+            enabled: !root.running && root.create-plan-name != "" && root.create-plan-id != "" && root.create-plan-file != "";
+            clicked => {
+                root.create-plan(root.create-plan-name, root.create-plan-id, root.create-plan-file);
+            }
+        }
+    }
+
+    if root.modal-kind == "rename": Rectangle {
+        x: (root.width - 440px) / 2;
+        y: (root.height - 300px) / 2;
+        width: 440px;
+        height: 300px;
+        background: #ffffff;
+        border-color: #e2e8f0;
+        border-width: 1px;
+        border-radius: 10px;
+
+        VerticalBox {
+            padding: 22px;
+            spacing: 16px;
+
+            HorizontalBox {
+                spacing: 12px;
+                Rectangle {
+                    width: 34px;
+                    height: 34px;
+                    background: #eff6ff;
+                    border-radius: 8px;
+                    Image {
+                        x: 8px;
+                        y: 8px;
+                        width: 18px;
+                        height: 18px;
+                        source: @image-url("icons/pencil.svg");
+                    }
+                }
+                VerticalBox {
+                    spacing: 3px;
+                    horizontal-stretch: 1;
+                    SelectableText {
+                        text: "编辑方案";
+                        text-color: #0f172a;
+                        text-size: 18px;
+                        text-weight: 700;
+                        height: 24px;
+                    }
+                    SelectableText {
+                        text: "只修改方案名称，标识和文件路径只读";
+                        text-color: #64748b;
+                        text-size: 12px;
+                        height: 18px;
+                    }
+                }
+            }
+
+            SelectableText { text: "方案名称"; text-color: #334155; text-size: 13px; text-weight: 700; height: 18px; }
+            LineEdit {
+                height: 40px;
+                text <=> root.rename-plan-name;
+            }
+
+            Rectangle {
+                height: 50px;
+                background: #f8fafc;
+                border-color: #e2e8f0;
+                border-width: 1px;
+                border-radius: 7px;
+                VerticalBox {
+                    padding: 8px;
+                    spacing: 5px;
+                    SelectableText { text: "标识：" + root.modal-plan-id; text-color: #475569; text-size: 12px; text-weight: 600; height: 16px; }
+                    SelectableText { text: "文件：" + root.modal-plan-file; text-color: #475569; text-size: 12px; text-weight: 600; height: 16px; }
+                }
+            }
+
+            SelectableText {
+                text: root.modal-error == "" ? "编辑已有方案时，只能修改显示名称；标识和 JSON 文件路径作为稳定标识锁定。" : root.modal-error;
+                text-color: root.modal-error == "" ? #64748b : #be123c;
+                text-size: 12px;
+                wrap: word-wrap;
+                single-line: false;
+                horizontal-stretch: 1;
+            }
+
+            HorizontalBox {
+                spacing: 10px;
+                Text { horizontal-stretch: 1; }
+                DialogButton { text: "取消"; clicked => { root.close-modal(); } }
+                DialogButton {
+                    text: "保存修改";
+                    primary: true;
+                    enabled: !root.running && root.rename-plan-name != "";
+                    clicked => { root.rename-plan(root.modal-plan-id, root.rename-plan-name); }
+                }
+            }
+        }
+    }
+
+    if root.modal-kind == "delete": Rectangle {
+        x: (root.width - 440px) / 2;
+        y: (root.height - 328px) / 2;
+        width: 440px;
+        height: 328px;
+        background: #ffffff;
+        border-color: #e2e8f0;
+        border-width: 1px;
+        border-radius: 10px;
+
+        VerticalBox {
+            padding: 22px;
+            spacing: 16px;
+
+            HorizontalBox {
+                spacing: 12px;
+                Rectangle {
+                    width: 34px;
+                    height: 34px;
+                    background: #fff1f2;
+                    border-radius: 8px;
+                    Image {
+                        x: 8px;
+                        y: 8px;
+                        width: 18px;
+                        height: 18px;
+                        source: @image-url("icons/trash-red.svg");
+                    }
+                }
+                VerticalBox {
+                    spacing: 3px;
+                    horizontal-stretch: 1;
+                    Text { text: "删除方案"; color: #0f172a; font-size: 18px; font-weight: 700; }
+                    Text { text: "需要确认后才会执行"; color: #64748b; font-size: 12px; }
+                }
+            }
+
+            Text {
+                text: "确认删除方案「" + root.modal-plan-name + "」？";
+                color: #1e293b;
+                font-size: 14px;
+                font-weight: 600;
+                wrap: word-wrap;
+            }
+            Text {
+                text: "此操作会移除 global.json 里的方案记录，并删除对应的方案 JSON。删除后启动器内不可恢复。";
+                color: #475569;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+
+            Rectangle {
+                height: 36px;
+                background: #f8fafc;
+                border-color: #e2e8f0;
+                border-width: 1px;
+                border-radius: 7px;
+                Text {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    text: root.modal-plan-file;
+                    color: #334155;
+                    font-size: 12px;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+
+            Text {
+                text: root.modal-error;
+                color: #be123c;
+                font-size: 12px;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+
+            HorizontalBox {
+                spacing: 10px;
+                Text { horizontal-stretch: 1; }
+                DialogButton { text: "取消"; clicked => { root.close-modal(); } }
+                DialogButton {
+                    text: "删除方案";
+                    danger: true;
+                    enabled: !root.running;
+                    clicked => { root.delete-plan(root.modal-plan-id); }
+                }
+            }
+        }
+    }
+
+    if root.modal-kind == "import-conflict": Rectangle {
+        x: (root.width - 480px) / 2;
+        y: (root.height - 372px) / 2;
+        width: 480px;
+        height: 372px;
+        background: #ffffff;
+        border-color: #e2e8f0;
+        border-width: 1px;
+        border-radius: 10px;
+
+        VerticalBox {
+            padding: 22px;
+            spacing: 16px;
+
+            HorizontalBox {
+                spacing: 12px;
+                Rectangle {
+                    width: 34px;
+                    height: 34px;
+                    background: #eff6ff;
+                    border-radius: 8px;
+                    Image {
+                        x: 8px;
+                        y: 8px;
+                        width: 18px;
+                        height: 18px;
+                        source: @image-url("icons/import-blue.svg");
+                    }
+                }
+                VerticalBox {
+                    spacing: 3px;
+                    horizontal-stretch: 1;
+                    SelectableText {
+                        text: "覆盖导入方案";
+                        text-color: #0f172a;
+                        text-size: 18px;
+                        text-weight: 700;
+                        height: 24px;
+                    }
+                    SelectableText {
+                        text: "导入文件中的方案标识已存在，需要确认后才会覆盖";
+                        text-color: #64748b;
+                        text-size: 12px;
+                        height: 18px;
+                    }
+                }
+            }
+
+            SelectableText {
+                text: "确认覆盖方案「" + root.import-conflict-name + "」？";
+                text-color: #1e293b;
+                text-size: 14px;
+                text-weight: 700;
+                height: 20px;
+            }
+
+            Rectangle {
+                height: 92px;
+                background: #f8fafc;
+                border-color: #e2e8f0;
+                border-width: 1px;
+                border-radius: 7px;
+                VerticalBox {
+                    padding: 10px;
+                    spacing: 8px;
+                    SelectableText { text: "方案标识: " + root.modal-plan-id; text-color: #334155; text-size: 12px; text-weight: 600; height: 16px; }
+                    SelectableText { text: "目标文件: " + root.import-conflict-file; text-color: #334155; text-size: 12px; text-weight: 600; height: 16px; }
+                    SelectableText { text: "来源文件: " + root.import-conflict-source; text-color: #64748b; text-size: 12px; height: 16px; }
+                }
+            }
+
+            SelectableText {
+                text: root.modal-error == "" ? "覆盖只会替换方案结构 JSON；global.json 中该方案的启用状态、启动方式和定时任务会保留。" : root.modal-error;
+                text-color: root.modal-error == "" ? #64748b : #be123c;
+                text-size: 12px;
+                wrap: word-wrap;
+                single-line: false;
+                horizontal-stretch: 1;
+            }
+
+            HorizontalBox {
+                spacing: 10px;
+                Text { horizontal-stretch: 1; }
+                DialogButton { text: "取消"; clicked => { root.close-modal(); } }
+                DialogButton {
+                    text: "覆盖导入";
+                    primary: true;
+                    width: 112px;
+                    enabled: !root.running;
+                    clicked => { root.confirm-import-overwrite(); }
+                }
+            }
+        }
+    }
+
+    if root.modal-kind == "add-item" || root.modal-kind == "edit-item": Rectangle {
+        x: (root.width - 580px) / 2;
+        y: (root.height - (root.item-form-kind == "path" ? 600px : 671px)) / 2 + (root.item-form-kind == "path" ? 8px : 10px);
+        width: 580px;
+        height: root.item-form-kind == "path" ? 600px : 671px;
+        background: #ffffff;
+        border-color: #e2e8f0;
+        border-width: 1px;
+        border-radius: 10px;
+
+        Rectangle {
+            x: 22px;
+            y: 28px;
+            width: 34px;
+            height: 34px;
+            background: #eff6ff;
+            border-radius: 8px;
+            Image {
+                x: 8px;
+                y: 8px;
+                width: 18px;
+                height: 18px;
+                source: @image-url("icons/plus-dark.svg");
+            }
+        }
+
+        SelectableText {
+            x: 68px;
+            y: 22px;
+            width: 490px;
+            height: 24px;
+            text: root.modal-kind == "add-item"
+                ? ("新增启动项 - " + (root.item-form-kind == "program" ? "程序" : (root.item-form-kind == "url" ? "链接" : (root.item-form-kind == "command" ? "命令" : "路径"))))
+                : ("编辑启动项 - " + (root.item-form-kind == "program" ? "程序" : (root.item-form-kind == "url" ? "链接" : (root.item-form-kind == "command" ? "命令" : "路径"))));
+            text-color: #0f172a;
+            text-size: 18px;
+            text-weight: 700;
+            vertical-alignment: center;
+        }
+        SelectableText {
+            x: 68px;
+            y: 47px;
+            width: 490px;
+            height: 18px;
+            text: root.item-form-kind == "program" ? "启动可执行程序，可配置参数和工作目录" : (root.item-form-kind == "url" ? "打开网页或协议链接，例如 https、mailto、obsidian 等" : (root.item-form-kind == "command" ? "高级模式：通过命令解释器执行命令，可配置工作目录" : "打开文件、文件夹、图片、音乐等，使用系统默认关联程序"));
+            text-color: #64748b;
+            text-size: 12px;
+            vertical-alignment: center;
+        }
+
+        SelectableText { x: 22px; y: 82px; width: 263px; height: 19px; text: "名称"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit { x: 22px; y: 107px; width: 263px; height: 38px; text <=> root.item-form-name; }
+        SelectableText { x: 295px; y: 82px; width: 263px; height: 19px; text: "启动项标识"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit { x: 295px; y: 107px; width: 263px; height: 38px; text <=> root.item-form-id; enabled: root.modal-kind == "add-item"; }
+
+        SelectableText { x: 22px; y: 155px; width: 536px; height: 19px; text: "描述"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit { x: 22px; y: 180px; width: 536px; height: 42px; text <=> root.item-form-description; }
+
+        SelectableText { x: 22px; y: 232px; width: 536px; height: 16px; text: "目标类型"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        for kind-name[index] in ["path", "program", "url", "command"]: Rectangle {
+            x: 22px + index * 135px;
+            y: 255px;
+            width: 129px;
+            height: 34px;
+            background: root.item-form-kind == kind-name ? #eaf3ff : (kind-touch.has-hover ? #f8fbff : #ffffff);
+            border-color: root.item-form-kind == kind-name ? #93c5fd : #cbd5e1;
+            border-width: 1px;
+            border-radius: 7px;
+            Text {
+                text: kind-name == "program" ? "程序" : (kind-name == "url" ? "链接" : (kind-name == "command" ? "命令" : "路径"));
+                color: root.item-form-kind == kind-name ? #1d4ed8 : #334155;
+                font-size: 12px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            kind-touch := TouchArea {
+                clicked => { root.item-kind-changed(kind-name); }
+            }
+        }
+
+        SelectableText {
+            x: 22px;
+            y: 299px;
+            width: 536px;
+            height: 19px;
+            text: root.item-form-kind == "program" ? "程序路径" : (root.item-form-kind == "url" ? "网址 / 协议链接" : (root.item-form-kind == "command" ? "命令内容" : "路径 / 文件 / 文件夹"));
+            text-color: #334155;
+            text-size: 13px;
+            text-weight: 700;
+        }
+        LineEdit { x: 22px; y: 324px; width: 536px; height: 38px; text <=> root.item-form-target; }
+
+        if root.item-form-kind == "program": SelectableText { x: 22px; y: 372px; width: 263px; height: 19px; text: "参数（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        if root.item-form-kind == "program": LineEdit { x: 22px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-args; }
+        if root.item-form-kind == "program": SelectableText { x: 295px; y: 372px; width: 263px; height: 19px; text: "工作目录（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        if root.item-form-kind == "program": LineEdit { x: 295px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-working-dir; }
+
+        if root.item-form-kind == "url": SelectableText { x: 22px; y: 372px; width: 263px; height: 19px; text: "打开浏览器"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        if root.item-form-kind == "url": LineEdit { x: 22px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-args; }
+        if root.item-form-kind == "url": SelectableText { x: 295px; y: 372px; width: 263px; height: 19px; text: "备用浏览器"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        if root.item-form-kind == "url": LineEdit { x: 295px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-working-dir; }
+
+        if root.item-form-kind == "command": SelectableText { x: 22px; y: 372px; width: 263px; height: 19px; text: "命令解释器"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        if root.item-form-kind == "command": ComboBox {
+            x: 22px;
+            y: 397px;
+            width: 263px;
+            height: 36px;
+            model: ["PowerShell", "命令提示符", "Sh"];
+            current-value <=> root.item-form-shell;
+            selected(value) => {
+                root.set-command-shell(value);
+            }
+        }
+        if root.item-form-kind == "command": SelectableText { x: 295px; y: 372px; width: 263px; height: 19px; text: "工作目录（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        if root.item-form-kind == "command": LineEdit { x: 295px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-working-dir; }
+
+        SelectableText { x: 22px; y: root.item-form-kind == "path" ? 372px : 443px; width: 263px; height: 16px; text: "执行前延迟（毫秒）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit { x: 22px; y: root.item-form-kind == "path" ? 394px : 465px; width: 263px; height: 36px; text <=> root.form-pre-delay-ms; }
+        SelectableText { x: 295px; y: root.item-form-kind == "path" ? 372px : 443px; width: 263px; height: 16px; text: "执行后延迟（毫秒）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit { x: 295px; y: root.item-form-kind == "path" ? 394px : 465px; width: 263px; height: 36px; text <=> root.form-post-delay-ms; }
+
+        SelectableText {
+            x: 22px;
+            y: root.item-form-kind == "path" ? 440px : 511px;
+            width: 536px;
+            height: 16px;
+            text: "失败时处理";
+            text-color: #334155;
+            text-size: 13px;
+            text-weight: 700;
+        }
+        for failure-name[index] in ["continue", "stop"]: Rectangle {
+            x: 22px + index * 272px;
+            y: root.item-form-kind == "path" ? 463px : 534px;
+            width: 264px;
+            height: 36px;
+            background: root.form-on-failure == failure-name ? (failure-name == "stop" ? #fff0f0 : #eaf3ff) : (failure-touch.has-hover ? (failure-name == "stop" ? #fff8f8 : #f8fbff) : #ffffff);
+            border-color: root.form-on-failure == failure-name ? (failure-name == "stop" ? #f0b8b8 : #93c5fd) : #cbd5e1;
+            border-width: 1px;
+            border-radius: 7px;
+            Text {
+                text: failure-name == "stop" ? "停止" : "继续";
+                color: root.form-on-failure == failure-name ? (failure-name == "stop" ? #be123c : #1d4ed8) : #334155;
+                font-size: 12px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            failure-touch := TouchArea { clicked => { root.set-failure-policy(failure-name); } }
+        }
+
+        SelectableText {
+            x: 22px;
+            y: root.item-form-kind == "path" ? 513px : 584px;
+            width: 536px;
+            height: 17px;
+            text: root.modal-error == "" ? (root.item-form-kind == "program" ? "程序类型会直接启动可执行文件；参数和工作目录为可选项。" : (root.item-form-kind == "url" ? "链接类型可指定首选浏览器；打开失败时再尝试备用浏览器。" : (root.item-form-kind == "command" ? "命令类型会显式通过命令解释器执行；适合高级用户或脚本启动。" : "路径类型只需要填写目标路径；保存后会写入当前方案 JSON。"))) : root.modal-error;
+            text-color: root.modal-error == "" ? #64748b : #be123c;
+            text-size: 12px;
+            wrap: word-wrap;
+            single-line: false;
+        }
+
+        DialogButton {
+            x: 350px;
+            y: root.item-form-kind == "path" ? 544px : 615px;
+            text: "取消";
+            clicked => { root.close-modal(); }
+        }
+        DialogButton {
+            x: 446px;
+            y: root.item-form-kind == "path" ? 544px : 615px;
+            text: root.modal-kind == "add-item" ? "创建启动项" : "保存启动项";
+            primary: true;
+            width: 112px;
+            enabled: !root.running && root.item-form-id != "" && root.item-form-name != "" && root.item-form-target != "";
+            clicked => {
+                root.save-item(root.item-form-id, root.item-form-name, root.item-form-description, root.item-form-kind, root.item-form-target, root.item-form-args, root.item-form-working-dir, root.item-form-shell, root.form-pre-delay-ms, root.form-post-delay-ms, root.form-on-failure);
+            }
+        }
+    }
+
+    if root.modal-kind == "edit-group" || root.modal-kind == "combine-group": Rectangle {
+        x: (root.width - 440px) / 2;
+        y: (root.height - 580px) / 2;
+        width: 440px;
+        height: 580px;
+        background: #ffffff;
+        border-color: #e2e8f0;
+        border-width: 1px;
+        border-radius: 10px;
+
+        Rectangle {
+            x: 22px;
+            y: 22px;
+            width: 34px;
+            height: 34px;
+            background: #fff7ea;
+            border-radius: 8px;
+            Image {
+                x: 8px;
+                y: 8px;
+                width: 18px;
+                height: 18px;
+                source: @image-url("icons/workflow.svg");
+            }
+        }
+
+        SelectableText {
+            x: 68px;
+            y: 24px;
+            width: 336px;
+            height: 24px;
+            text: root.modal-kind == "combine-group" ? "组合为新组" : "编辑组";
+            text-color: #0f172a;
+            text-size: 18px;
+            text-weight: 700;
+            vertical-alignment: center;
+        }
+        SelectableText {
+            x: 68px;
+            y: 49px;
+            width: 336px;
+            height: 18px;
+            text: root.modal-kind == "combine-group" ? "把选中的根层级启动项按顺序纳入组" : "只修改组信息，不在此弹窗编辑组内项";
+            text-color: #64748b;
+            text-size: 12px;
+            vertical-alignment: center;
+        }
+
+        SelectableText { x: 22px; y: 94px; width: 396px; height: 18px; text: "组标识"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit { x: 22px; y: 120px; width: 396px; height: 38px; text <=> root.group-form-id; enabled: root.modal-kind == "combine-group"; }
+
+        SelectableText { x: 22px; y: 174px; width: 396px; height: 18px; text: "组名称"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit { x: 22px; y: 200px; width: 396px; height: 38px; text <=> root.group-form-name; }
+
+        SelectableText { x: 22px; y: 254px; width: 396px; height: 18px; text: "组描述"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit { x: 22px; y: 280px; width: 396px; height: 42px; text <=> root.group-form-description; }
+
+        SelectableText { x: 22px; y: 346px; width: 188px; height: 18px; text: "执行前延迟"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit { x: 22px; y: 372px; width: 188px; height: 38px; text <=> root.form-pre-delay-ms; }
+        SelectableText { x: 230px; y: 346px; width: 188px; height: 18px; text: "执行后延迟"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        LineEdit { x: 230px; y: 372px; width: 188px; height: 38px; text <=> root.form-post-delay-ms; }
+
+        SelectableText {
+            x: 22px;
+            y: 430px;
+            width: 396px;
+            height: 18px;
+            text: "失败时处理";
+            text-color: #334155;
+            text-size: 13px;
+            text-weight: 700;
+        }
+        for failure-name[index] in ["continue", "stop"]: Rectangle {
+            x: 22px + index * 208px;
+            y: 456px;
+            width: 188px;
+            height: 36px;
+            background: root.form-on-failure == failure-name ? #fff7ea : (group-failure-touch.has-hover ? #fffaf2 : #ffffff);
+            border-color: root.form-on-failure == failure-name ? #f0d1a1 : #cbd5e1;
+            border-width: 1px;
+            border-radius: 7px;
+            Text {
+                text: failure-name == "stop" ? "停止" : "继续";
+                color: root.form-on-failure == failure-name ? #92400e : #334155;
+                font-size: 12px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            group-failure-touch := TouchArea { clicked => { root.set-failure-policy(failure-name); } }
+        }
+
+        SelectableText {
+            x: 22px;
+            y: 508px;
+            width: 396px;
+            height: 18px;
+            text: root.modal-error == "" ? "保存前会校验方案 JSON；失败时不会覆盖原文件。" : root.modal-error;
+            text-color: root.modal-error == "" ? #64748b : #be123c;
+            text-size: 12px;
+        }
+
+        DialogButton { x: 218px; y: 526px; text: "取消"; clicked => { root.close-modal(); } }
+        DialogButton {
+            x: 314px;
+            y: 526px;
+            text: root.modal-kind == "combine-group" ? "创建组" : "保存组";
+            primary: true;
+            enabled: !root.running && root.group-form-id != "" && root.group-form-name != "";
+            clicked => {
+                root.save-group(root.group-form-id, root.group-form-name, root.group-form-description, root.form-pre-delay-ms, root.form-post-delay-ms, root.form-on-failure);
+            }
+        }
+    }
+
+    if root.modal-kind == "schedule": Rectangle {
+        x: (root.width - 520px) / 2;
+        y: (root.height - 560px) / 2;
+        width: 520px;
+        height: 560px;
+        background: #ffffff;
+        border-color: #e2e8f0;
+        border-width: 1px;
+        border-radius: 10px;
+
+        Rectangle {
+            x: 22px;
+            y: 22px;
+            width: 34px;
+            height: 34px;
+            background: #fff7ea;
+            border-radius: 8px;
+            Image {
+                x: 8px;
+                y: 8px;
+                width: 18px;
+                height: 18px;
+                source: @image-url("icons/alarm.svg");
+            }
+        }
+
+        SelectableText {
+            x: 68px;
+            y: 24px;
+            width: 430px;
+            height: 24px;
+            text: "定时任务";
+            text-color: #0f172a;
+            text-size: 18px;
+            text-weight: 700;
+            vertical-alignment: center;
+        }
+        SelectableText {
+            x: 68px;
+            y: 49px;
+            width: 430px;
+            height: 18px;
+            text: "仅在应用启动自动时显示并生效；保存后写入 global.json";
+            text-color: #64748b;
+            text-size: 12px;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            x: 22px;
+            y: 82px;
+            width: 476px;
+            height: 148px;
+            background: #fffaf2;
+            border-color: #f0d1a1;
             border-width: 1px;
             border-radius: 8px;
 
+            ListView {
+                x: 10px;
+                y: 10px;
+                width: parent.width - 20px;
+                height: parent.height - 20px;
+                for row in root.schedule-rows: Rectangle {
+                    height: 34px;
+                    background: #ffffff;
+                    border-color: #f0d1a1;
+                    border-width: 1px;
+                    border-radius: 7px;
+
+                    SelectableText {
+                        x: 10px;
+                        y: 8px;
+                        width: row.label == "" ? parent.width - 20px : parent.width - 154px;
+                        height: 18px;
+                        text: row.value;
+                        text-color: #334155;
+                        text-size: 12px;
+                        text-weight: 700;
+                    }
+
+                    if row.label != "": Rectangle {
+                        x: parent.width - 136px;
+                        y: 5px;
+                        width: 58px;
+                        height: 24px;
+                        background: schedule-edit-touch.has-hover ? #eef6ff : #ffffff;
+                        border-color: schedule-edit-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                        border-width: 1px;
+                        border-radius: 6px;
+                        Text {
+                            text: "编辑";
+                            color: #1d4ed8;
+                            font-size: 11px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        schedule-edit-touch := TouchArea {
+                            enabled: !root.running;
+                            clicked => { root.edit-schedule(row.label); }
+                        }
+                    }
+
+                    if row.label != "": Rectangle {
+                        x: parent.width - 68px;
+                        y: 5px;
+                        width: 58px;
+                        height: 24px;
+                        background: schedule-delete-touch.has-hover ? #fff0f0 : #ffffff;
+                        border-color: schedule-delete-touch.has-hover ? #e79a9a : #f0b8b8;
+                        border-width: 1px;
+                        border-radius: 6px;
+                        Text {
+                            text: "删除";
+                            color: #a32020;
+                            font-size: 11px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        schedule-delete-touch := TouchArea {
+                            enabled: !root.running;
+                            clicked => { root.delete-schedule(row.label); }
+                        }
+                    }
+                }
+            }
+        }
+
+        SelectableText {
+            x: 22px;
+            y: 246px;
+            width: 476px;
+            height: 18px;
+            text: root.schedule-form-index == "" ? "新增定时规则" : "编辑当前定时规则";
+            text-color: #334155;
+            text-size: 13px;
+            text-weight: 700;
+        }
+
+        SelectableText { x: 22px; y: 276px; width: 476px; height: 16px; text: "定时类型"; text-color: #334155; text-size: 13px; text-weight: 700; }
+        for schedule-kind[index] in ["daily", "weekly", "once"]: Rectangle {
+            x: 22px + index * 160px;
+            y: 299px;
+            width: 148px;
+            height: 34px;
+            background: root.schedule-form-kind == schedule-kind ? #eaf3ff : (schedule-kind-touch.has-hover ? #f8fbff : #ffffff);
+            border-color: root.schedule-form-kind == schedule-kind ? #93c5fd : #cbd5e1;
+            border-width: 1px;
+            border-radius: 7px;
             Text {
-                x: 14px;
-                y: 12px;
-                width: parent.width - 28px;
-                text: root.status;
-                color: #1f3b64;
-                wrap: word-wrap;
+                text: schedule-kind == "weekly" ? "每周" : (schedule-kind == "once" ? "单次" : "每天");
+                color: root.schedule-form-kind == schedule-kind ? #1d4ed8 : #334155;
+                font-size: 12px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            schedule-kind-touch := TouchArea {
+                enabled: !root.running;
+                clicked => { root.schedule-kind-changed(schedule-kind); }
+            }
+        }
+
+        if root.schedule-form-kind == "daily" || root.schedule-form-kind == "weekly": SelectableText {
+            x: 22px;
+            y: 349px;
+            width: 218px;
+            height: 18px;
+            text: "时间（HH:MM）";
+            text-color: #334155;
+            text-size: 13px;
+            text-weight: 700;
+        }
+        if root.schedule-form-kind == "daily" || root.schedule-form-kind == "weekly": LineEdit {
+            x: 22px;
+            y: 375px;
+            width: 218px;
+            height: 38px;
+            text <=> root.schedule-form-time;
+        }
+
+        if root.schedule-form-kind == "weekly": SelectableText {
+            x: 262px;
+            y: 349px;
+            width: 236px;
+            height: 18px;
+            text: "星期";
+            text-color: #334155;
+            text-size: 13px;
+            text-weight: 700;
+        }
+        if root.schedule-form-kind == "weekly": ComboBox {
+            x: 262px;
+            y: 375px;
+            width: 236px;
+            height: 38px;
+            model: ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+            current-value <=> root.schedule-form-weekday;
+        }
+
+        if root.schedule-form-kind == "once": SelectableText {
+            x: 22px;
+            y: 349px;
+            width: 476px;
+            height: 18px;
+            text: "执行时间（YYYY-MM-DDTHH:MM:SS）";
+            text-color: #334155;
+            text-size: 13px;
+            text-weight: 700;
+        }
+        if root.schedule-form-kind == "once": LineEdit {
+            x: 22px;
+            y: 375px;
+            width: 476px;
+            height: 38px;
+            text <=> root.schedule-form-at;
+        }
+
+        SelectableText {
+            x: 22px;
+            y: 438px;
+            width: 476px;
+            height: 36px;
+            text: root.modal-error == "" ? "每天/每周使用 HH:MM；单次使用 YYYY-MM-DDTHH:MM:SS。保存失败不会覆盖 global.json。" : root.modal-error;
+            text-color: root.modal-error == "" ? #64748b : #be123c;
+            text-size: 12px;
+            wrap: word-wrap;
+            single-line: false;
+        }
+
+        DialogButton { x: 234px; y: 502px; text: "取消"; clicked => { root.close-modal(); } }
+        DialogButton {
+            x: 330px;
+            y: 502px;
+            text: root.schedule-form-index == "" ? "新增定时" : "保存定时";
+            primary: true;
+            width: 168px;
+            enabled: !root.running && (root.schedule-form-kind == "once" ? root.schedule-form-at != "" : root.schedule-form-time != "");
+            clicked => {
+                root.save-schedule(root.schedule-form-index, root.schedule-form-kind, root.schedule-form-time, root.schedule-form-weekday, root.schedule-form-at);
             }
         }
     }

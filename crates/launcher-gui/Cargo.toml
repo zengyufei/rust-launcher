@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 launcher-core.workspace = true
+rfd.workspace = true
 slint.workspace = true
 
 [build-dependencies]

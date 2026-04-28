@@ -1,12 +1,12 @@
 # Rust Launcher
 
-Rust Launcher is a Windows-first native launcher prototype. It stores all plans as JSON, runs ordered launch sequences from the CLI, and includes a Slint GUI review shell.
+Rust Launcher is a Windows-first native launcher prototype. It stores all plans as JSON, runs ordered launch sequences from the CLI, and includes a Slint GUI for read-only browsing and running plans.
 
 ## Project Layout
 
 - `crates/launcher-core`: JSON models, validation, scheduling, execution, and platform launch adapters.
 - `crates/launcher-cli`: command-line interface.
-- `crates/launcher-gui`: Slint GUI shell for reviewing the first UI structure.
+- `crates/launcher-gui`: Slint GUI for browsing real JSON plans and running the selected plan.
 - `data/`: sample development data.
 - `docs/interaction-prd.md`: interaction PRD distilled from the Pencil design.
 
@@ -64,4 +64,4 @@ Supported management surfaces:
 cargo run -p launcher-gui
 ```
 
-The GUI is intentionally a review shell in v1: it loads real JSON, shows plans, launch modes, plan structure, and status text. Full editing comes after UI approval.
+The GUI v1 follows the Pencil design in a read-only running mode: it loads real JSON, shows plans, launch modes, plan structure, selected-node properties, and execution logs. It only exposes "运行方案"; JSON editing dialogs are reserved for the next GUI phase.
