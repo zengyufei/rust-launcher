@@ -1382,92 +1382,128 @@ export component AppWindow inherits Window {
 
     if root.modal-kind == "rename": Rectangle {
         x: (root.width - 440px) / 2;
-        y: (root.height - 300px) / 2;
+        y: (root.height - 380px) / 2;
         width: 440px;
-        height: 300px;
+        height: 380px;
         background: #ffffff;
         border-color: #e2e8f0;
         border-width: 1px;
         border-radius: 10px;
 
-        VerticalBox {
-            padding: 22px;
-            spacing: 16px;
-
-            HorizontalBox {
-                spacing: 12px;
-                Rectangle {
-                    width: 34px;
-                    height: 34px;
-                    background: #eff6ff;
-                    border-radius: 8px;
-                    Image {
-                        x: 8px;
-                        y: 8px;
-                        width: 18px;
-                        height: 18px;
-                        source: @image-url("icons/pencil.svg");
-                    }
-                }
-                VerticalBox {
-                    spacing: 3px;
-                    horizontal-stretch: 1;
-                    SelectableText {
-                        text: "编辑方案";
-                        text-color: #0f172a;
-                        text-size: 18px;
-                        text-weight: 700;
-                        height: 24px;
-                    }
-                    SelectableText {
-                        text: "只修改方案名称，标识和文件路径只读";
-                        text-color: #64748b;
-                        text-size: 12px;
-                        height: 18px;
-                    }
-                }
+        Rectangle {
+            x: 22px;
+            y: 22px;
+            width: 34px;
+            height: 34px;
+            background: #eff6ff;
+            border-radius: 8px;
+            Image {
+                x: 8px;
+                y: 8px;
+                width: 18px;
+                height: 18px;
+                source: @image-url("icons/pencil.svg");
             }
+        }
 
-            SelectableText { text: "方案名称"; text-color: #334155; text-size: 13px; text-weight: 700; height: 18px; }
-            LineEdit {
-                height: 40px;
-                text <=> root.rename-plan-name;
-            }
+        SelectableText {
+            x: 68px;
+            y: 24px;
+            width: 336px;
+            height: 24px;
+            text: "编辑方案";
+            text-color: #0f172a;
+            text-size: 18px;
+            text-weight: 700;
+            vertical-alignment: center;
+        }
+        SelectableText {
+            x: 68px;
+            y: 49px;
+            width: 336px;
+            height: 18px;
+            text: "只修改方案名称，标识和文件路径只读";
+            text-color: #64748b;
+            text-size: 12px;
+            vertical-alignment: center;
+        }
 
-            Rectangle {
-                height: 50px;
-                background: #f8fafc;
-                border-color: #e2e8f0;
-                border-width: 1px;
-                border-radius: 7px;
-                VerticalBox {
-                    padding: 8px;
-                    spacing: 5px;
-                    SelectableText { text: "标识：" + root.modal-plan-id; text-color: #475569; text-size: 12px; text-weight: 600; height: 16px; }
-                    SelectableText { text: "文件：" + root.modal-plan-file; text-color: #475569; text-size: 12px; text-weight: 600; height: 16px; }
-                }
-            }
+        SelectableText {
+            x: 22px;
+            y: 102px;
+            width: 396px;
+            height: 18px;
+            text: "方案名称";
+            text-color: #334155;
+            text-size: 13px;
+            text-weight: 700;
+        }
+        LineEdit {
+            x: 22px;
+            y: 128px;
+            width: 396px;
+            height: 38px;
+            text <=> root.rename-plan-name;
+        }
 
+        Rectangle {
+            x: 22px;
+            y: 188px;
+            width: 396px;
+            height: 74px;
+            background: #f8fafc;
+            border-color: #e2e8f0;
+            border-width: 1px;
+            border-radius: 7px;
             SelectableText {
-                text: root.modal-error == "" ? "编辑已有方案时，只能修改显示名称；标识和 JSON 文件路径作为稳定标识锁定。" : root.modal-error;
-                text-color: root.modal-error == "" ? #64748b : #be123c;
+                x: 12px;
+                y: 11px;
+                width: 372px;
+                height: 18px;
+                text: "方案 id: " + root.modal-plan-id;
+                text-color: #475569;
                 text-size: 12px;
-                wrap: word-wrap;
-                single-line: false;
-                horizontal-stretch: 1;
+                text-weight: 600;
+                vertical-alignment: center;
             }
+            SelectableText {
+                x: 12px;
+                y: 42px;
+                width: 372px;
+                height: 18px;
+                text: "方案文件: " + root.modal-plan-file;
+                text-color: #475569;
+                text-size: 12px;
+                text-weight: 600;
+                vertical-alignment: center;
+            }
+        }
 
-            HorizontalBox {
-                spacing: 10px;
-                Text { horizontal-stretch: 1; }
-                DialogButton { text: "取消"; clicked => { root.close-modal(); } }
-                DialogButton {
-                    text: "保存修改";
-                    primary: true;
-                    enabled: !root.running && root.rename-plan-name != "";
-                    clicked => { root.rename-plan(root.modal-plan-id, root.rename-plan-name); }
-                }
-            }
+        SelectableText {
+            x: 22px;
+            y: 282px;
+            width: 396px;
+            height: 36px;
+            text: root.modal-error == "" ? "已有方案只允许修改显示名称；方案 id 和 JSON 文件路径会作为稳定标识保持锁定。" : root.modal-error;
+            text-color: root.modal-error == "" ? #64748b : #be123c;
+            text-size: 12px;
+            wrap: word-wrap;
+            single-line: false;
+        }
+
+        DialogButton {
+            x: 218px;
+            y: 324px;
+            text: "取消";
+            clicked => { root.close-modal(); }
+        }
+        DialogButton {
+            x: 314px;
+            y: 324px;
+            text: "保存修改";
+            primary: true;
+            enabled: !root.running && root.rename-plan-name != "";
+            clicked => { root.rename-plan(root.modal-plan-id, root.rename-plan-name); }
         }
     }
 

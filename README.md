@@ -37,6 +37,9 @@ The CLI can now edit the JSON model directly:
 
 ```powershell
 cargo run -p launcher-cli -- plan new demo "演示方案"
+cargo run -p launcher-cli -- plan export demo .\demo.json
+cargo run -p launcher-cli -- plan import .\demo.json
+cargo run -p launcher-cli -- plan import .\demo.json --overwrite
 cargo run -p launcher-cli -- group add demo dev "开发环境" --description "开发工具" --on-failure stop
 cargo run -p launcher-cli -- item add-path demo project-folder "项目目录" "D:\cache\runMain" --group dev --post-delay-ms 500
 cargo run -p launcher-cli -- item add-command demo dev-server "开发服务器" "npm run dev" --group dev --shell powershell --working-dir "D:\cache\runMain"

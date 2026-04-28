@@ -8,11 +8,11 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use launcher_core::{
     add_group, add_item as store_add_item, add_plan_schedule, create_plan, create_plan_with_file,
     default_data_dir, delete_group, delete_item, delete_plan, delete_plan_schedule, execute_plan,
-    execute_single_item, load_global, load_plan, load_workspace, move_item, move_item_to_group,
-    move_item_to_root, move_plan, move_sequence_node, rename_plan, set_plan_enabled,
-    set_plan_launch_trigger, update_group, update_item, validate_workspace, CommandShell,
-    ExecuteOptions, ExecutionReport, FailurePolicy, GlobalConfig, Group, GroupUpdate, ItemUpdate,
-    LaunchItem, LaunchTarget, LaunchTrigger, LauncherError, NodeMoveDirection, Plan,
+    execute_single_item, export_plan, import_plan, load_global, load_plan, load_workspace,
+    move_item, move_item_to_group, move_item_to_root, move_plan, move_sequence_node, rename_plan,
+    set_plan_enabled, set_plan_launch_trigger, update_group, update_item, validate_workspace,
+    CommandShell, ExecuteOptions, ExecutionReport, FailurePolicy, GlobalConfig, Group, GroupUpdate,
+    ItemUpdate, LaunchItem, LaunchTarget, LaunchTrigger, LauncherError, NodeMoveDirection, Plan,
     PlanCatalogEntry, PlanMoveDirection, ScheduleRule, Scheduler, SequenceNode, Weekday,
 };
 
@@ -102,6 +102,15 @@ enum PlanCommand {
         id: String,
         #[arg(value_enum)]
         direction: MoveDirection,
+    },
+    Export {
+        id: String,
+        output_path: PathBuf,
+    },
+    Import {
+        source_path: PathBuf,
+        #[arg(long)]
+        overwrite: bool,
     },
 }
 
@@ -502,6 +511,30 @@ fn run_plan_command(data_dir: &Path, command: PlanCommand) -> Result<()> {
             println!("moved plan {id} {direction:?}");
             Ok(())
         }
+        PlanCommand::Export { id, output_path } => {
+            export_plan(data_dir, &id, &output_path)?;
+            println!("exported plan {id} to {}", output_path.display());
+            Ok(())
+        }
+        PlanCommand::Import {
+            source_path,
+            overwrite,
+        } => match import_plan(data_dir, &source_path, overwrite) {
+            Ok(plan) => {
+                if overwrite {
+                    println!("overwrote plan {} ({})", plan.id, plan.name);
+                } else {
+                    println!("imported plan {} ({})", plan.id, plan.name);
+                }
+                Ok(())
+            }
+            Err(LauncherError::PlanImportConflict { plan_id, .. }) => Err(Box::new(
+                LauncherError::Validation(format!(
+                    "plan import conflict: {plan_id}; rerun with --overwrite to replace the existing plan JSON"
+                )),
+            )),
+            Err(error) => Err(Box::new(error)),
+        },
     }
 }
 

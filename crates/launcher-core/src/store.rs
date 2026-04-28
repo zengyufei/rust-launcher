@@ -1002,9 +1002,11 @@ where
         path: path.to_path_buf(),
         source,
     })?;
-    serde_json::from_str(&text).map_err(|source| LauncherError::Json {
-        path: path.to_path_buf(),
-        source,
+    serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|source| {
+        LauncherError::Json {
+            path: path.to_path_buf(),
+            source,
+        }
     })
 }
 
@@ -1310,6 +1312,23 @@ mod tests {
                 && entry.launch == LaunchConfig::default()
         }));
         validate_workspace(&workspace).unwrap();
+    }
+
+    #[test]
+    fn imports_plan_json_with_utf8_bom() {
+        let data_dir = tempfile::tempdir().unwrap();
+        write_workspace(data_dir.path());
+        let source = data_dir.path().join("bom.json");
+        fs::write(
+            &source,
+            "\u{feff}{\"version\":2,\"id\":\"bom\",\"name\":\"BOM\",\"sequence\":[]}",
+        )
+        .unwrap();
+
+        let plan = import_plan(data_dir.path(), &source, false).unwrap();
+
+        assert_eq!(plan.id, "bom");
+        assert!(data_dir.path().join("plans/bom.json").exists());
     }
 
     #[test]
