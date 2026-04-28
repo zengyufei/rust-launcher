@@ -1,0 +1,210 @@
+﻿import { ComboBox, LineEdit } from "std-widgets.slint";
+import { DialogButton, SelectableText } from "components.slint";
+
+export component ItemDialog inherits Rectangle {
+    in property <bool> running;
+    in property <length> surface-width;
+    in property <length> surface-height;
+    in property <string> modal-kind;
+    in property <string> modal-error;
+    in-out property <string> item-form-kind;
+    in-out property <string> item-form-id;
+    in-out property <string> item-form-name;
+    in-out property <string> item-form-description;
+    in-out property <string> item-form-target;
+    in-out property <string> item-form-args;
+    in-out property <string> item-form-working-dir;
+    in-out property <string> item-form-shell;
+    in-out property <string> form-pre-delay-ms;
+    in-out property <string> form-post-delay-ms;
+    in-out property <string> form-on-failure;
+
+    callback close-modal();
+    callback item-kind-changed(string);
+    callback save-item(string, string, string, string, string, string, string, string, string, string, string);
+    callback set-failure-policy(string);
+    callback set-command-shell(string);
+
+    x: (root.surface-width - 580px) / 2;
+    y: (root.surface-height - (root.item-form-kind == "path" ? 600px : 671px)) / 2 + (root.item-form-kind == "path" ? 8px : 10px);
+    width: 580px;
+    height: root.item-form-kind == "path" ? 600px : 671px;
+    background: #ffffff;
+    border-color: #e2e8f0;
+    border-width: 1px;
+    border-radius: 10px;
+    
+    Rectangle {
+        x: 22px;
+        y: 28px;
+        width: 34px;
+        height: 34px;
+        background: #eff6ff;
+        border-radius: 8px;
+        Image {
+            x: 8px;
+            y: 8px;
+            width: 18px;
+            height: 18px;
+            source: @image-url("icons/plus-dark.svg");
+        }
+    }
+    
+    SelectableText {
+        x: 68px;
+        y: 22px;
+        width: 490px;
+        height: 24px;
+        text: root.modal-kind == "add-item"
+            ? ("新增启动项 - " + (root.item-form-kind == "program" ? "程序" : (root.item-form-kind == "url" ? "链接" : (root.item-form-kind == "command" ? "命令" : "路径"))))
+            : ("编辑启动项 - " + (root.item-form-kind == "program" ? "程序" : (root.item-form-kind == "url" ? "链接" : (root.item-form-kind == "command" ? "命令" : "路径"))));
+        text-color: #0f172a;
+        text-size: 18px;
+        text-weight: 700;
+        vertical-alignment: center;
+    }
+    SelectableText {
+        x: 68px;
+        y: 47px;
+        width: 490px;
+        height: 18px;
+        text: root.item-form-kind == "program" ? "启动可执行程序，可配置参数和工作目录" : (root.item-form-kind == "url" ? "打开网页或协议链接，例如 https、mailto、obsidian 等" : (root.item-form-kind == "command" ? "高级模式：通过命令解释器执行命令，可配置工作目录" : "打开文件、文件夹、图片、音乐等，使用系统默认关联程序"));
+        text-color: #64748b;
+        text-size: 12px;
+        vertical-alignment: center;
+    }
+    
+    SelectableText { x: 22px; y: 82px; width: 263px; height: 19px; text: "名称"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 22px; y: 107px; width: 263px; height: 38px; text <=> root.item-form-name; }
+    SelectableText { x: 295px; y: 82px; width: 263px; height: 19px; text: "启动项标识"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 295px; y: 107px; width: 263px; height: 38px; text <=> root.item-form-id; enabled: root.modal-kind == "add-item"; }
+    
+    SelectableText { x: 22px; y: 155px; width: 536px; height: 19px; text: "描述"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 22px; y: 180px; width: 536px; height: 42px; text <=> root.item-form-description; }
+    
+    SelectableText { x: 22px; y: 232px; width: 536px; height: 16px; text: "目标类型"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    for kind-name[index] in ["path", "program", "url", "command"]: Rectangle {
+        x: 22px + index * 135px;
+        y: 255px;
+        width: 129px;
+        height: 34px;
+        background: root.item-form-kind == kind-name ? #eaf3ff : (kind-touch.has-hover ? #f8fbff : #ffffff);
+        border-color: root.item-form-kind == kind-name ? #93c5fd : #cbd5e1;
+        border-width: 1px;
+        border-radius: 7px;
+        Text {
+            text: kind-name == "program" ? "程序" : (kind-name == "url" ? "链接" : (kind-name == "command" ? "命令" : "路径"));
+            color: root.item-form-kind == kind-name ? #1d4ed8 : #334155;
+            font-size: 12px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        kind-touch := TouchArea {
+            clicked => { root.item-kind-changed(kind-name); }
+        }
+    }
+    
+    SelectableText {
+        x: 22px;
+        y: 299px;
+        width: 536px;
+        height: 19px;
+        text: root.item-form-kind == "program" ? "程序路径" : (root.item-form-kind == "url" ? "网址 / 协议链接" : (root.item-form-kind == "command" ? "命令内容" : "路径 / 文件 / 文件夹"));
+        text-color: #334155;
+        text-size: 13px;
+        text-weight: 700;
+    }
+    LineEdit { x: 22px; y: 324px; width: 536px; height: 38px; text <=> root.item-form-target; }
+    
+    if root.item-form-kind == "program": SelectableText { x: 22px; y: 372px; width: 263px; height: 19px; text: "参数（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    if root.item-form-kind == "program": LineEdit { x: 22px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-args; }
+    if root.item-form-kind == "program": SelectableText { x: 295px; y: 372px; width: 263px; height: 19px; text: "工作目录（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    if root.item-form-kind == "program": LineEdit { x: 295px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-working-dir; }
+    
+    if root.item-form-kind == "url": SelectableText { x: 22px; y: 372px; width: 263px; height: 19px; text: "打开浏览器"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    if root.item-form-kind == "url": LineEdit { x: 22px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-args; }
+    if root.item-form-kind == "url": SelectableText { x: 295px; y: 372px; width: 263px; height: 19px; text: "备用浏览器"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    if root.item-form-kind == "url": LineEdit { x: 295px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-working-dir; }
+    
+    if root.item-form-kind == "command": SelectableText { x: 22px; y: 372px; width: 263px; height: 19px; text: "命令解释器"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    if root.item-form-kind == "command": ComboBox {
+        x: 22px;
+        y: 397px;
+        width: 263px;
+        height: 36px;
+        model: ["PowerShell", "命令提示符", "Sh"];
+        current-value <=> root.item-form-shell;
+        selected(value) => {
+            root.set-command-shell(value);
+        }
+    }
+    if root.item-form-kind == "command": SelectableText { x: 295px; y: 372px; width: 263px; height: 19px; text: "工作目录（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    if root.item-form-kind == "command": LineEdit { x: 295px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-working-dir; }
+    
+    SelectableText { x: 22px; y: root.item-form-kind == "path" ? 372px : 443px; width: 263px; height: 16px; text: "执行前延迟（毫秒）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 22px; y: root.item-form-kind == "path" ? 394px : 465px; width: 263px; height: 36px; text <=> root.form-pre-delay-ms; }
+    SelectableText { x: 295px; y: root.item-form-kind == "path" ? 372px : 443px; width: 263px; height: 16px; text: "执行后延迟（毫秒）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 295px; y: root.item-form-kind == "path" ? 394px : 465px; width: 263px; height: 36px; text <=> root.form-post-delay-ms; }
+    
+    SelectableText {
+        x: 22px;
+        y: root.item-form-kind == "path" ? 440px : 511px;
+        width: 536px;
+        height: 16px;
+        text: "失败时处理";
+        text-color: #334155;
+        text-size: 13px;
+        text-weight: 700;
+    }
+    for failure-name[index] in ["continue", "stop"]: Rectangle {
+        x: 22px + index * 272px;
+        y: root.item-form-kind == "path" ? 463px : 534px;
+        width: 264px;
+        height: 36px;
+        background: root.form-on-failure == failure-name ? (failure-name == "stop" ? #fff0f0 : #eaf3ff) : (failure-touch.has-hover ? (failure-name == "stop" ? #fff8f8 : #f8fbff) : #ffffff);
+        border-color: root.form-on-failure == failure-name ? (failure-name == "stop" ? #f0b8b8 : #93c5fd) : #cbd5e1;
+        border-width: 1px;
+        border-radius: 7px;
+        Text {
+            text: failure-name == "stop" ? "停止" : "继续";
+            color: root.form-on-failure == failure-name ? (failure-name == "stop" ? #be123c : #1d4ed8) : #334155;
+            font-size: 12px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        failure-touch := TouchArea { clicked => { root.set-failure-policy(failure-name); } }
+    }
+    
+    SelectableText {
+        x: 22px;
+        y: root.item-form-kind == "path" ? 513px : 584px;
+        width: 536px;
+        height: 17px;
+        text: root.modal-error == "" ? (root.item-form-kind == "program" ? "程序类型会直接启动可执行文件；参数和工作目录为可选项。" : (root.item-form-kind == "url" ? "链接类型可指定首选浏览器；打开失败时再尝试备用浏览器。" : (root.item-form-kind == "command" ? "命令类型会显式通过命令解释器执行；适合高级用户或脚本启动。" : "路径类型只需要填写目标路径；保存后会写入当前方案 JSON。"))) : root.modal-error;
+        text-color: root.modal-error == "" ? #64748b : #be123c;
+        text-size: 12px;
+        wrap: word-wrap;
+        single-line: false;
+    }
+    
+    DialogButton {
+        x: 350px;
+        y: root.item-form-kind == "path" ? 544px : 615px;
+        text: "取消";
+        clicked => { root.close-modal(); }
+    }
+    DialogButton {
+        x: 446px;
+        y: root.item-form-kind == "path" ? 544px : 615px;
+        text: root.modal-kind == "add-item" ? "创建启动项" : "保存启动项";
+        primary: true;
+        width: 112px;
+        enabled: !root.running && root.item-form-id != "" && root.item-form-name != "" && root.item-form-target != "";
+        clicked => {
+            root.save-item(root.item-form-id, root.item-form-name, root.item-form-description, root.item-form-kind, root.item-form-target, root.item-form-args, root.item-form-working-dir, root.item-form-shell, root.form-pre-delay-ms, root.form-post-delay-ms, root.form-on-failure);
+        }
+    }
+}
+

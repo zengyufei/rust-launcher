@@ -1,0 +1,93 @@
+import { VerticalBox } from "std-widgets.slint";
+import { PlanMenuRow } from "components.slint";
+
+export component PlanContextMenu inherits Rectangle {
+    in property <bool> menu-visible;
+    in property <string> context-plan-id;
+    in property <bool> context-plan-enabled;
+
+    callback close-plan-menu();
+    callback plan-menu-action(string, string);
+
+    if root.menu-visible: Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        background: #00000000;
+        TouchArea {
+            clicked => {
+                root.close-plan-menu();
+            }
+        }
+    }
+
+    if root.menu-visible: Rectangle {
+        x: 302px;
+        y: 212px;
+        width: 184px;
+        height: 294px;
+        background: #ffffff;
+        border-color: #cbd5e1;
+        border-width: 1px;
+        border-radius: 8px;
+
+        VerticalBox {
+            padding: 6px;
+            spacing: 2px;
+
+            PlanMenuRow {
+                text: "编辑方案";
+                icon: @image-url("icons/pencil.svg");
+                emphasized: true;
+                clicked => { root.plan-menu-action(root.context-plan-id, "编辑方案"); }
+            }
+            PlanMenuRow {
+                text: "导出方案";
+                icon: @image-url("icons/export-gray.svg");
+                emphasized: true;
+                clicked => { root.plan-menu-action(root.context-plan-id, "导出方案"); }
+            }
+            PlanMenuRow {
+                text: "删除方案";
+                icon: @image-url("icons/trash-red.svg");
+                danger: true;
+                emphasized: true;
+                clicked => { root.plan-menu-action(root.context-plan-id, "删除方案"); }
+            }
+            Rectangle {
+                height: 1px;
+                background: #e2e8f0;
+            }
+            PlanMenuRow {
+                text: "置顶";
+                icon: @image-url("icons/chevrons-up-gray.svg");
+                clicked => { root.plan-menu-action(root.context-plan-id, "置顶"); }
+            }
+            PlanMenuRow {
+                text: "上移";
+                icon: @image-url("icons/chevron-up-gray.svg");
+                clicked => { root.plan-menu-action(root.context-plan-id, "上移"); }
+            }
+            PlanMenuRow {
+                text: "下移";
+                icon: @image-url("icons/chevron-down-gray.svg");
+                clicked => { root.plan-menu-action(root.context-plan-id, "下移"); }
+            }
+            PlanMenuRow {
+                text: "置底";
+                icon: @image-url("icons/chevrons-down-gray.svg");
+                clicked => { root.plan-menu-action(root.context-plan-id, "置底"); }
+            }
+            Rectangle {
+                height: 1px;
+                background: #e2e8f0;
+            }
+            PlanMenuRow {
+                text: root.context-plan-enabled ? "禁用方案" : "启用方案";
+                icon: @image-url("icons/power-off-gray.svg");
+                clicked => { root.plan-menu-action(root.context-plan-id, root.context-plan-enabled ? "禁用方案" : "启用方案"); }
+            }
+        }
+    }
+}

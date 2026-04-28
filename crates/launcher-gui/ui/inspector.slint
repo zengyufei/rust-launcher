@@ -1,0 +1,210 @@
+import { HorizontalBox, ListView, VerticalBox } from "std-widgets.slint";
+import { InspectorRow } from "models.slint";
+import { Panel, SectionTitle, SelectableText } from "components.slint";
+
+export component InspectorPanel inherits Panel {
+    in property <string> data-dir;
+    in property <string> selected-plan-file;
+    in property <bool> running;
+    in property <[InspectorRow]> launch-rows;
+    in property <bool> schedule-visible;
+    in property <[InspectorRow]> schedule-rows;
+
+    callback set-launch-trigger(string);
+    callback open-schedule-modal();
+
+    width: 338px;
+    vertical-stretch: 1;
+
+    VerticalBox {
+        padding: 14px;
+        spacing: 10px;
+
+        HorizontalBox {
+            spacing: 8px;
+            Image {
+                width: 18px;
+                height: 18px;
+                source: @image-url("icons/sliders.svg");
+            }
+            SectionTitle { text: "属性与启动方式"; }
+        }
+
+        Rectangle {
+            background: #ffffff;
+            border-color: #e3e8f0;
+            border-width: 1px;
+            border-radius: 8px;
+            height: 154px;
+
+            VerticalBox {
+                padding: 12px;
+                spacing: 7px;
+                SelectableText {
+                    text: "方案启动";
+                    text-color: #182033;
+                    text-size: 14px;
+                    text-weight: 700;
+                    height: 20px;
+                }
+                SelectableText {
+                    text: "点击任一启动方式可修改";
+                    text-color: #60708a;
+                    text-size: 11px;
+                    height: 16px;
+                }
+                for row in root.launch-rows: Rectangle {
+                    height: 32px;
+                    background: row.value == "selected" ? #eaf3ff : (launch-row-touch.has-hover ? #f8fbff : #f2f5f9);
+                    border-color: row.value == "selected" ? #bfd8f4 : (launch-row-touch.has-hover ? #bfd8f4 : #e3e8f0);
+                    border-width: 1px;
+                    border-radius: 7px;
+                    Image {
+                        x: 8px;
+                        y: 8px;
+                        width: 16px;
+                        height: 16px;
+                        source: row.value == "selected" ? @image-url("icons/circle-dot.svg") : @image-url("icons/circle.svg");
+                    }
+                    Text {
+                        x: 32px;
+                        y: 0px;
+                        width: parent.width - 62px;
+                        height: parent.height;
+                        text: row.label;
+                        color: row.value == "selected" ? #1d4ed8 : #334155;
+                        font-size: 13px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                    Image {
+                        x: parent.width - 22px;
+                        y: 9px;
+                        width: 14px;
+                        height: 14px;
+                        source: @image-url("icons/chevron-right.svg");
+                    }
+                    launch-row-touch := TouchArea {
+                        clicked => {
+                            root.set-launch-trigger(row.label);
+                        }
+                    }
+                }
+            }
+        }
+
+        if root.schedule-visible: Rectangle {
+            background: schedule-card-touch.has-hover ? #fff2dc : #fff7ea;
+            border-color: schedule-card-touch.has-hover ? #e7bd78 : #f0d1a1;
+            border-width: 1px;
+            border-radius: 8px;
+            min-height: 138px;
+            vertical-stretch: 1;
+
+            VerticalBox {
+                padding: 12px;
+                spacing: 7px;
+                HorizontalBox {
+                    spacing: 8px;
+                    Image {
+                        width: 16px;
+                        height: 16px;
+                        source: @image-url("icons/alarm.svg");
+                    }
+                    Text {
+                        text: "定时任务";
+                        color: #92400e;
+                        font-size: 14px;
+                        font-weight: 700;
+                        horizontal-stretch: 1;
+                    }
+                    Text {
+                        text: "编辑";
+                        color: #1d4ed8;
+                        font-size: 12px;
+                        font-weight: 700;
+                    }
+                }
+                ListView {
+                    vertical-stretch: 1;
+                    for row in root.schedule-rows: Rectangle {
+                        height: 28px;
+                        background: #ffffff;
+                        border-color: #f0d1a1;
+                        border-width: 1px;
+                        border-radius: 7px;
+                        Text {
+                            x: 8px;
+                            y: 6px;
+                            width: parent.width - 16px;
+                            text: row.value;
+                            color: #334155;
+                            font-size: 12px;
+                            font-weight: 700;
+                            overflow: elide;
+                        }
+                    }
+                }
+                SelectableText {
+                    text: "仅在应用启动自动时显示并生效。";
+                    text-color: #805000;
+                    text-size: 11px;
+                    height: 16px;
+                }
+            }
+
+            schedule-card-touch := TouchArea {
+                enabled: !root.running;
+                clicked => {
+                    root.open-schedule-modal();
+                }
+            }
+        }
+
+        Rectangle {
+            background: #f7f8fb;
+            border-color: #e3e8f0;
+            border-width: 1px;
+            border-radius: 8px;
+            height: 132px;
+
+            VerticalBox {
+                padding: 12px;
+                spacing: 7px;
+                HorizontalBox {
+                    spacing: 8px;
+                    Image {
+                        width: 16px;
+                        height: 16px;
+                        source: @image-url("icons/braces.svg");
+                    }
+                    SelectableText {
+                        text: "JSON 存储";
+                        text-color: #182033;
+                        text-size: 14px;
+                        text-weight: 700;
+                        height: 20px;
+                    }
+                }
+                SelectableText {
+                    text: "global.json: 全局设置与启动方式";
+                    text-color: #263247;
+                    text-size: 13px;
+                    height: 18px;
+                }
+                SelectableText {
+                    text: root.selected-plan-file;
+                    text-color: #263247;
+                    text-size: 13px;
+                    height: 18px;
+                }
+                SelectableText {
+                    text: root.data-dir;
+                    text-color: #60708a;
+                    text-size: 11px;
+                    height: 16px;
+                }
+            }
+        }
+    }
+}

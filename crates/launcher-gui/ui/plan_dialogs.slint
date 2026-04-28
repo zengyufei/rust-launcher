@@ -1,0 +1,464 @@
+﻿import { HorizontalBox, LineEdit, VerticalBox } from "std-widgets.slint";
+import { DialogButton, SelectableText } from "components.slint";
+
+export component CreatePlanDialog inherits Rectangle {
+    in property <bool> running;
+    in property <length> surface-width;
+    in property <length> surface-height;
+    in property <string> modal-error;
+    in-out property <string> create-plan-name;
+    in-out property <string> create-plan-id;
+    in-out property <string> create-plan-file;
+
+    callback close-modal();
+    callback create-plan(string, string, string);
+
+    x: (root.surface-width - 440px) / 2;
+    y: (root.surface-height - 420px) / 2;
+    width: 440px;
+    height: 420px;
+    background: #ffffff;
+    border-color: #e2e8f0;
+    border-width: 1px;
+    border-radius: 10px;
+    
+    Rectangle {
+        x: 22px;
+        y: 22px;
+        width: 34px;
+        height: 34px;
+        background: #eff6ff;
+        border-radius: 8px;
+        Image {
+            x: 8px;
+            y: 8px;
+            width: 18px;
+            height: 18px;
+            source: @image-url("icons/plus-dark.svg");
+        }
+    }
+    
+    SelectableText {
+        x: 68px;
+        y: 24px;
+        width: 336px;
+        height: 24px;
+        text: "新建方案";
+        text-color: #0f172a;
+        text-size: 18px;
+        text-weight: 700;
+        vertical-alignment: center;
+    }
+    SelectableText {
+        x: 68px;
+        y: 49px;
+        width: 336px;
+        height: 18px;
+        text: "创建时填写名称、标识和 JSON 文件路径";
+        text-color: #64748b;
+        text-size: 12px;
+        vertical-alignment: center;
+    }
+    
+    SelectableText { x: 22px; y: 102px; width: 396px; height: 18px; text: "方案名称"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit {
+        x: 22px;
+        y: 128px;
+        width: 396px;
+        height: 38px;
+        text <=> root.create-plan-name;
+    }
+    SelectableText { x: 22px; y: 182px; width: 396px; height: 18px; text: "方案标识"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit {
+        x: 22px;
+        y: 208px;
+        width: 396px;
+        height: 38px;
+        text <=> root.create-plan-id;
+    }
+    SelectableText { x: 22px; y: 262px; width: 396px; height: 18px; text: "方案文件"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit {
+        x: 22px;
+        y: 288px;
+        width: 396px;
+        height: 38px;
+        text <=> root.create-plan-file;
+    }
+    
+    SelectableText {
+        x: 22px;
+        y: 346px;
+        width: 396px;
+        height: 34px;
+        text: root.modal-error == "" ? "创建后标识和文件路径将作为方案稳定标识，后续编辑弹窗中只读。" : root.modal-error;
+        text-color: root.modal-error == "" ? #64748b : #be123c;
+        text-size: 12px;
+        wrap: word-wrap;
+        single-line: false;
+    }
+    
+    DialogButton {
+        x: 218px;
+        y: 364px;
+        text: "取消";
+        clicked => { root.close-modal(); }
+    }
+    DialogButton {
+        x: 314px;
+        y: 364px;
+        text: "创建方案";
+        primary: true;
+        enabled: !root.running && root.create-plan-name != "" && root.create-plan-id != "" && root.create-plan-file != "";
+        clicked => {
+            root.create-plan(root.create-plan-name, root.create-plan-id, root.create-plan-file);
+        }
+    }
+}
+
+export component RenamePlanDialog inherits Rectangle {
+    in property <bool> running;
+    in property <length> surface-width;
+    in property <length> surface-height;
+    in property <string> modal-plan-id;
+    in property <string> modal-plan-file;
+    in property <string> modal-error;
+    in-out property <string> rename-plan-name;
+
+    callback close-modal();
+    callback rename-plan(string, string);
+
+    x: (root.surface-width - 440px) / 2;
+    y: (root.surface-height - 380px) / 2;
+    width: 440px;
+    height: 380px;
+    background: #ffffff;
+    border-color: #e2e8f0;
+    border-width: 1px;
+    border-radius: 10px;
+    
+    Rectangle {
+        x: 22px;
+        y: 22px;
+        width: 34px;
+        height: 34px;
+        background: #eff6ff;
+        border-radius: 8px;
+        Image {
+            x: 8px;
+            y: 8px;
+            width: 18px;
+            height: 18px;
+            source: @image-url("icons/pencil.svg");
+        }
+    }
+    
+    SelectableText {
+        x: 68px;
+        y: 24px;
+        width: 336px;
+        height: 24px;
+        text: "编辑方案";
+        text-color: #0f172a;
+        text-size: 18px;
+        text-weight: 700;
+        vertical-alignment: center;
+    }
+    SelectableText {
+        x: 68px;
+        y: 49px;
+        width: 336px;
+        height: 18px;
+        text: "只修改方案名称，标识和文件路径只读";
+        text-color: #64748b;
+        text-size: 12px;
+        vertical-alignment: center;
+    }
+    
+    SelectableText {
+        x: 22px;
+        y: 102px;
+        width: 396px;
+        height: 18px;
+        text: "方案名称";
+        text-color: #334155;
+        text-size: 13px;
+        text-weight: 700;
+    }
+    LineEdit {
+        x: 22px;
+        y: 128px;
+        width: 396px;
+        height: 38px;
+        text <=> root.rename-plan-name;
+    }
+    
+    Rectangle {
+        x: 22px;
+        y: 188px;
+        width: 396px;
+        height: 74px;
+        background: #f8fafc;
+        border-color: #e2e8f0;
+        border-width: 1px;
+        border-radius: 7px;
+        SelectableText {
+            x: 12px;
+            y: 11px;
+            width: 372px;
+            height: 18px;
+            text: "方案 id: " + root.modal-plan-id;
+            text-color: #475569;
+            text-size: 12px;
+            text-weight: 600;
+            vertical-alignment: center;
+        }
+        SelectableText {
+            x: 12px;
+            y: 42px;
+            width: 372px;
+            height: 18px;
+            text: "方案文件: " + root.modal-plan-file;
+            text-color: #475569;
+            text-size: 12px;
+            text-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+    
+    SelectableText {
+        x: 22px;
+        y: 282px;
+        width: 396px;
+        height: 36px;
+        text: root.modal-error == "" ? "已有方案只允许修改显示名称；方案 id 和 JSON 文件路径会作为稳定标识保持锁定。" : root.modal-error;
+        text-color: root.modal-error == "" ? #64748b : #be123c;
+        text-size: 12px;
+        wrap: word-wrap;
+        single-line: false;
+    }
+    
+    DialogButton {
+        x: 218px;
+        y: 324px;
+        text: "取消";
+        clicked => { root.close-modal(); }
+    }
+    DialogButton {
+        x: 314px;
+        y: 324px;
+        text: "保存修改";
+        primary: true;
+        enabled: !root.running && root.rename-plan-name != "";
+        clicked => { root.rename-plan(root.modal-plan-id, root.rename-plan-name); }
+    }
+}
+
+export component DeletePlanDialog inherits Rectangle {
+    in property <bool> running;
+    in property <length> surface-width;
+    in property <length> surface-height;
+    in property <string> modal-plan-id;
+    in property <string> modal-plan-name;
+    in property <string> modal-plan-file;
+    in property <string> modal-error;
+
+    callback close-modal();
+    callback delete-plan(string);
+
+    x: (root.surface-width - 440px) / 2;
+    y: (root.surface-height - 328px) / 2;
+    width: 440px;
+    height: 328px;
+    background: #ffffff;
+    border-color: #e2e8f0;
+    border-width: 1px;
+    border-radius: 10px;
+    
+    VerticalBox {
+        padding: 22px;
+        spacing: 16px;
+    
+        HorizontalBox {
+            spacing: 12px;
+            Rectangle {
+                width: 34px;
+                height: 34px;
+                background: #fff1f2;
+                border-radius: 8px;
+                Image {
+                    x: 8px;
+                    y: 8px;
+                    width: 18px;
+                    height: 18px;
+                    source: @image-url("icons/trash-red.svg");
+                }
+            }
+            VerticalBox {
+                spacing: 3px;
+                horizontal-stretch: 1;
+                Text { text: "删除方案"; color: #0f172a; font-size: 18px; font-weight: 700; }
+                Text { text: "需要确认后才会执行"; color: #64748b; font-size: 12px; }
+            }
+        }
+    
+        Text {
+            text: "确认删除方案「" + root.modal-plan-name + "」？";
+            color: #1e293b;
+            font-size: 14px;
+            font-weight: 600;
+            wrap: word-wrap;
+        }
+        Text {
+            text: "此操作会移除 global.json 里的方案记录，并删除对应的方案 JSON。删除后启动器内不可恢复。";
+            color: #475569;
+            font-size: 13px;
+            wrap: word-wrap;
+        }
+    
+        Rectangle {
+            height: 36px;
+            background: #f8fafc;
+            border-color: #e2e8f0;
+            border-width: 1px;
+            border-radius: 7px;
+            Text {
+                x: 10px;
+                width: parent.width - 20px;
+                text: root.modal-plan-file;
+                color: #334155;
+                font-size: 12px;
+                font-weight: 600;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+    
+        Text {
+            text: root.modal-error;
+            color: #be123c;
+            font-size: 12px;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+        }
+    
+        HorizontalBox {
+            spacing: 10px;
+            Text { horizontal-stretch: 1; }
+            DialogButton { text: "取消"; clicked => { root.close-modal(); } }
+            DialogButton {
+                text: "删除方案";
+                danger: true;
+                enabled: !root.running;
+                clicked => { root.delete-plan(root.modal-plan-id); }
+            }
+        }
+    }
+}
+
+export component ImportConflictDialog inherits Rectangle {
+    in property <bool> running;
+    in property <length> surface-width;
+    in property <length> surface-height;
+    in property <string> modal-plan-id;
+    in property <string> modal-error;
+    in property <string> import-conflict-name;
+    in property <string> import-conflict-file;
+    in property <string> import-conflict-source;
+
+    callback close-modal();
+    callback confirm-import-overwrite();
+
+    x: (root.surface-width - 480px) / 2;
+    y: (root.surface-height - 372px) / 2;
+    width: 480px;
+    height: 372px;
+    background: #ffffff;
+    border-color: #e2e8f0;
+    border-width: 1px;
+    border-radius: 10px;
+    
+    VerticalBox {
+        padding: 22px;
+        spacing: 16px;
+    
+        HorizontalBox {
+            spacing: 12px;
+            Rectangle {
+                width: 34px;
+                height: 34px;
+                background: #eff6ff;
+                border-radius: 8px;
+                Image {
+                    x: 8px;
+                    y: 8px;
+                    width: 18px;
+                    height: 18px;
+                    source: @image-url("icons/import-blue.svg");
+                }
+            }
+            VerticalBox {
+                spacing: 3px;
+                horizontal-stretch: 1;
+                SelectableText {
+                    text: "覆盖导入方案";
+                    text-color: #0f172a;
+                    text-size: 18px;
+                    text-weight: 700;
+                    height: 24px;
+                }
+                SelectableText {
+                    text: "导入文件中的方案标识已存在，需要确认后才会覆盖";
+                    text-color: #64748b;
+                    text-size: 12px;
+                    height: 18px;
+                }
+            }
+        }
+    
+        SelectableText {
+            text: "确认覆盖方案「" + root.import-conflict-name + "」？";
+            text-color: #1e293b;
+            text-size: 14px;
+            text-weight: 700;
+            height: 20px;
+        }
+    
+        Rectangle {
+            height: 92px;
+            background: #f8fafc;
+            border-color: #e2e8f0;
+            border-width: 1px;
+            border-radius: 7px;
+            VerticalBox {
+                padding: 10px;
+                spacing: 8px;
+                SelectableText { text: "方案标识: " + root.modal-plan-id; text-color: #334155; text-size: 12px; text-weight: 600; height: 16px; }
+                SelectableText { text: "目标文件: " + root.import-conflict-file; text-color: #334155; text-size: 12px; text-weight: 600; height: 16px; }
+                SelectableText { text: "来源文件: " + root.import-conflict-source; text-color: #64748b; text-size: 12px; height: 16px; }
+            }
+        }
+    
+        SelectableText {
+            text: root.modal-error == "" ? "覆盖只会替换方案结构 JSON；global.json 中该方案的启用状态、启动方式和定时任务会保留。" : root.modal-error;
+            text-color: root.modal-error == "" ? #64748b : #be123c;
+            text-size: 12px;
+            wrap: word-wrap;
+            single-line: false;
+            horizontal-stretch: 1;
+        }
+    
+        HorizontalBox {
+            spacing: 10px;
+            Text { horizontal-stretch: 1; }
+            DialogButton { text: "取消"; clicked => { root.close-modal(); } }
+            DialogButton {
+                text: "覆盖导入";
+                primary: true;
+                width: 112px;
+                enabled: !root.running;
+                clicked => { root.confirm-import-overwrite(); }
+            }
+        }
+    }
+}
+

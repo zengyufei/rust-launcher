@@ -1,0 +1,133 @@
+﻿import { LineEdit } from "std-widgets.slint";
+import { DialogButton, SelectableText } from "components.slint";
+
+export component GroupDialog inherits Rectangle {
+    in property <bool> running;
+    in property <length> surface-width;
+    in property <length> surface-height;
+    in property <string> modal-kind;
+    in property <string> modal-error;
+    in-out property <string> group-form-id;
+    in-out property <string> group-form-name;
+    in-out property <string> group-form-description;
+    in-out property <string> form-pre-delay-ms;
+    in-out property <string> form-post-delay-ms;
+    in-out property <string> form-on-failure;
+
+    callback close-modal();
+    callback save-group(string, string, string, string, string, string);
+    callback set-failure-policy(string);
+
+    x: (root.surface-width - 440px) / 2;
+    y: (root.surface-height - 580px) / 2;
+    width: 440px;
+    height: 580px;
+    background: #ffffff;
+    border-color: #e2e8f0;
+    border-width: 1px;
+    border-radius: 10px;
+    
+    Rectangle {
+        x: 22px;
+        y: 22px;
+        width: 34px;
+        height: 34px;
+        background: #fff7ea;
+        border-radius: 8px;
+        Image {
+            x: 8px;
+            y: 8px;
+            width: 18px;
+            height: 18px;
+            source: @image-url("icons/workflow.svg");
+        }
+    }
+    
+    SelectableText {
+        x: 68px;
+        y: 24px;
+        width: 336px;
+        height: 24px;
+        text: root.modal-kind == "combine-group" ? "组合为新组" : "编辑组";
+        text-color: #0f172a;
+        text-size: 18px;
+        text-weight: 700;
+        vertical-alignment: center;
+    }
+    SelectableText {
+        x: 68px;
+        y: 49px;
+        width: 336px;
+        height: 18px;
+        text: root.modal-kind == "combine-group" ? "把选中的根层级启动项按顺序纳入组" : "只修改组信息，不在此弹窗编辑组内项";
+        text-color: #64748b;
+        text-size: 12px;
+        vertical-alignment: center;
+    }
+    
+    SelectableText { x: 22px; y: 94px; width: 396px; height: 18px; text: "组标识"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 22px; y: 120px; width: 396px; height: 38px; text <=> root.group-form-id; enabled: root.modal-kind == "combine-group"; }
+    
+    SelectableText { x: 22px; y: 174px; width: 396px; height: 18px; text: "组名称"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 22px; y: 200px; width: 396px; height: 38px; text <=> root.group-form-name; }
+    
+    SelectableText { x: 22px; y: 254px; width: 396px; height: 18px; text: "组描述"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 22px; y: 280px; width: 396px; height: 42px; text <=> root.group-form-description; }
+    
+    SelectableText { x: 22px; y: 346px; width: 188px; height: 18px; text: "执行前延迟"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 22px; y: 372px; width: 188px; height: 38px; text <=> root.form-pre-delay-ms; }
+    SelectableText { x: 230px; y: 346px; width: 188px; height: 18px; text: "执行后延迟"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 230px; y: 372px; width: 188px; height: 38px; text <=> root.form-post-delay-ms; }
+    
+    SelectableText {
+        x: 22px;
+        y: 430px;
+        width: 396px;
+        height: 18px;
+        text: "失败时处理";
+        text-color: #334155;
+        text-size: 13px;
+        text-weight: 700;
+    }
+    for failure-name[index] in ["continue", "stop"]: Rectangle {
+        x: 22px + index * 208px;
+        y: 456px;
+        width: 188px;
+        height: 36px;
+        background: root.form-on-failure == failure-name ? #fff7ea : (group-failure-touch.has-hover ? #fffaf2 : #ffffff);
+        border-color: root.form-on-failure == failure-name ? #f0d1a1 : #cbd5e1;
+        border-width: 1px;
+        border-radius: 7px;
+        Text {
+            text: failure-name == "stop" ? "停止" : "继续";
+            color: root.form-on-failure == failure-name ? #92400e : #334155;
+            font-size: 12px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        group-failure-touch := TouchArea { clicked => { root.set-failure-policy(failure-name); } }
+    }
+    
+    SelectableText {
+        x: 22px;
+        y: 508px;
+        width: 396px;
+        height: 18px;
+        text: root.modal-error == "" ? "保存前会校验方案 JSON；失败时不会覆盖原文件。" : root.modal-error;
+        text-color: root.modal-error == "" ? #64748b : #be123c;
+        text-size: 12px;
+    }
+    
+    DialogButton { x: 218px; y: 526px; text: "取消"; clicked => { root.close-modal(); } }
+    DialogButton {
+        x: 314px;
+        y: 526px;
+        text: root.modal-kind == "combine-group" ? "创建组" : "保存组";
+        primary: true;
+        enabled: !root.running && root.group-form-id != "" && root.group-form-name != "";
+        clicked => {
+            root.save-group(root.group-form-id, root.group-form-name, root.group-form-description, root.form-pre-delay-ms, root.form-post-delay-ms, root.form-on-failure);
+        }
+    }
+}

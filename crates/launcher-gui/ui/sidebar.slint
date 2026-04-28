@@ -1,0 +1,140 @@
+import { HorizontalBox, LineEdit, ListView, VerticalBox } from "std-widgets.slint";
+import { PlanRow } from "models.slint";
+import { Panel, PrimaryMiniButton, SectionTitle } from "components.slint";
+
+export component Sidebar inherits Panel {
+    in property <[PlanRow]> plan-rows;
+    in property <bool> running;
+    in-out property <string> search-query;
+
+    callback select-plan(string);
+    callback open-plan-menu(string);
+    callback search-changed(string);
+    callback open-create-plan();
+    callback open-import-plan();
+
+    width: 286px;
+    vertical-stretch: 1;
+
+    VerticalBox {
+        padding: 14px;
+        spacing: 12px;
+
+        HorizontalBox {
+            spacing: 8px;
+            Image {
+                width: 18px;
+                height: 18px;
+                source: @image-url("icons/layout-list.svg");
+            }
+            SectionTitle {
+                text: "方案";
+                horizontal-stretch: 1;
+            }
+        }
+
+        Rectangle {
+            height: 38px;
+            background: #f4f6fa;
+            border-color: #e0e6ef;
+            border-width: 1px;
+            border-radius: 6px;
+
+            LineEdit {
+                x: 36px;
+                y: 1px;
+                width: parent.width - 44px;
+                height: 36px;
+                text <=> root.search-query;
+                placeholder-text: "搜索方案或启动项";
+                font-size: 13px;
+                edited(query) => {
+                    root.search-changed(query);
+                }
+            }
+            Image {
+                x: 12px;
+                y: 11px;
+                width: 16px;
+                height: 16px;
+                source: @image-url("icons/search.svg");
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            horizontal-stretch: 1;
+            clip: true;
+
+            ListView {
+                width: parent.width;
+                height: parent.height;
+                vertical-scrollbar-policy: as-needed;
+                horizontal-scrollbar-policy: always-off;
+                for row in root.plan-rows: Rectangle {
+                    height: 62px;
+                    background: row.selected ? #eaf3ff : (plan-touch.has-hover ? #f8fbff : #ffffff);
+                    border-color: row.selected ? #8eb8f5 : (plan-touch.has-hover ? #bfd8f4 : #e6ebf2);
+                    border-width: 1px;
+                    border-radius: 7px;
+
+                    Image {
+                        x: 10px;
+                        y: 11px;
+                        width: 16px;
+                        height: 16px;
+                        source: @image-url("icons/briefcase.svg");
+                    }
+                    Text {
+                        x: 34px;
+                        y: 9px;
+                        width: parent.width - 46px;
+                        text: row.id + "  " + row.name;
+                        color: row.enabled ? #263247 : #8a94a6;
+                        font-size: 14px;
+                        font-weight: 600;
+                        overflow: elide;
+                    }
+                    Text {
+                        x: 12px;
+                        y: 36px;
+                        width: parent.width - 24px;
+                        text: row.meta;
+                        color: #60708a;
+                        font-size: 11px;
+                        overflow: elide;
+                    }
+
+                    plan-touch := TouchArea {
+                        clicked => {
+                            root.select-plan(row.id);
+                        }
+                        pointer-event(event) => {
+                            if event.button == PointerEventButton.right && event.kind == PointerEventKind.up {
+                                root.open-plan-menu(row.id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        HorizontalBox {
+            height: 34px;
+            spacing: 10px;
+            PrimaryMiniButton {
+                text: "新建方案";
+                width: 124px;
+                enabled: !root.running;
+                clicked => { root.open-create-plan(); }
+            }
+            PrimaryMiniButton {
+                text: "导入方案";
+                icon: @image-url("icons/import-white.svg");
+                width: 124px;
+                enabled: !root.running;
+                clicked => { root.open-import-plan(); }
+            }
+        }
+    }
+}

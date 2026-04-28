@@ -1,0 +1,266 @@
+﻿import { ComboBox, LineEdit, ListView } from "std-widgets.slint";
+import { InspectorRow } from "models.slint";
+import { DialogButton, SelectableText } from "components.slint";
+
+export component ScheduleDialog inherits Rectangle {
+    in property <bool> running;
+    in property <length> surface-width;
+    in property <length> surface-height;
+    in property <string> modal-error;
+    in property <[InspectorRow]> schedule-rows;
+    in-out property <string> schedule-form-index;
+    in-out property <string> schedule-form-kind;
+    in-out property <string> schedule-form-time;
+    in-out property <string> schedule-form-weekday;
+    in-out property <string> schedule-form-at;
+
+    callback close-modal();
+    callback schedule-kind-changed(string);
+    callback edit-schedule(string);
+    callback delete-schedule(string);
+    callback save-schedule(string, string, string, string, string);
+
+    x: (root.surface-width - 520px) / 2;
+    y: (root.surface-height - 560px) / 2;
+    width: 520px;
+    height: 560px;
+    background: #ffffff;
+    border-color: #e2e8f0;
+    border-width: 1px;
+    border-radius: 10px;
+    
+    Rectangle {
+        x: 22px;
+        y: 22px;
+        width: 34px;
+        height: 34px;
+        background: #fff7ea;
+        border-radius: 8px;
+        Image {
+            x: 8px;
+            y: 8px;
+            width: 18px;
+            height: 18px;
+            source: @image-url("icons/alarm.svg");
+        }
+    }
+    
+    SelectableText {
+        x: 68px;
+        y: 24px;
+        width: 430px;
+        height: 24px;
+        text: "定时任务";
+        text-color: #0f172a;
+        text-size: 18px;
+        text-weight: 700;
+        vertical-alignment: center;
+    }
+    SelectableText {
+        x: 68px;
+        y: 49px;
+        width: 430px;
+        height: 18px;
+        text: "仅在应用启动自动时显示并生效；保存后写入 global.json";
+        text-color: #64748b;
+        text-size: 12px;
+        vertical-alignment: center;
+    }
+    
+    Rectangle {
+        x: 22px;
+        y: 82px;
+        width: 476px;
+        height: 148px;
+        background: #fffaf2;
+        border-color: #f0d1a1;
+        border-width: 1px;
+        border-radius: 8px;
+    
+        ListView {
+            x: 10px;
+            y: 10px;
+            width: parent.width - 20px;
+            height: parent.height - 20px;
+            for row in root.schedule-rows: Rectangle {
+                height: 34px;
+                background: #ffffff;
+                border-color: #f0d1a1;
+                border-width: 1px;
+                border-radius: 7px;
+    
+                SelectableText {
+                    x: 10px;
+                    y: 8px;
+                    width: row.label == "" ? parent.width - 20px : parent.width - 154px;
+                    height: 18px;
+                    text: row.value;
+                    text-color: #334155;
+                    text-size: 12px;
+                    text-weight: 700;
+                }
+    
+                if row.label != "": Rectangle {
+                    x: parent.width - 136px;
+                    y: 5px;
+                    width: 58px;
+                    height: 24px;
+                    background: schedule-edit-touch.has-hover ? #eef6ff : #ffffff;
+                    border-color: schedule-edit-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                    border-width: 1px;
+                    border-radius: 6px;
+                    Text {
+                        text: "编辑";
+                        color: #1d4ed8;
+                        font-size: 11px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    schedule-edit-touch := TouchArea {
+                        enabled: !root.running;
+                        clicked => { root.edit-schedule(row.label); }
+                    }
+                }
+    
+                if row.label != "": Rectangle {
+                    x: parent.width - 68px;
+                    y: 5px;
+                    width: 58px;
+                    height: 24px;
+                    background: schedule-delete-touch.has-hover ? #fff0f0 : #ffffff;
+                    border-color: schedule-delete-touch.has-hover ? #e79a9a : #f0b8b8;
+                    border-width: 1px;
+                    border-radius: 6px;
+                    Text {
+                        text: "删除";
+                        color: #a32020;
+                        font-size: 11px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    schedule-delete-touch := TouchArea {
+                        enabled: !root.running;
+                        clicked => { root.delete-schedule(row.label); }
+                    }
+                }
+            }
+        }
+    }
+    
+    SelectableText {
+        x: 22px;
+        y: 246px;
+        width: 476px;
+        height: 18px;
+        text: root.schedule-form-index == "" ? "新增定时规则" : "编辑当前定时规则";
+        text-color: #334155;
+        text-size: 13px;
+        text-weight: 700;
+    }
+    
+    SelectableText { x: 22px; y: 276px; width: 476px; height: 16px; text: "定时类型"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    for schedule-kind[index] in ["daily", "weekly", "once"]: Rectangle {
+        x: 22px + index * 160px;
+        y: 299px;
+        width: 148px;
+        height: 34px;
+        background: root.schedule-form-kind == schedule-kind ? #eaf3ff : (schedule-kind-touch.has-hover ? #f8fbff : #ffffff);
+        border-color: root.schedule-form-kind == schedule-kind ? #93c5fd : #cbd5e1;
+        border-width: 1px;
+        border-radius: 7px;
+        Text {
+            text: schedule-kind == "weekly" ? "每周" : (schedule-kind == "once" ? "单次" : "每天");
+            color: root.schedule-form-kind == schedule-kind ? #1d4ed8 : #334155;
+            font-size: 12px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        schedule-kind-touch := TouchArea {
+            enabled: !root.running;
+            clicked => { root.schedule-kind-changed(schedule-kind); }
+        }
+    }
+    
+    if root.schedule-form-kind == "daily" || root.schedule-form-kind == "weekly": SelectableText {
+        x: 22px;
+        y: 349px;
+        width: 218px;
+        height: 18px;
+        text: "时间（HH:MM）";
+        text-color: #334155;
+        text-size: 13px;
+        text-weight: 700;
+    }
+    if root.schedule-form-kind == "daily" || root.schedule-form-kind == "weekly": LineEdit {
+        x: 22px;
+        y: 375px;
+        width: 218px;
+        height: 38px;
+        text <=> root.schedule-form-time;
+    }
+    
+    if root.schedule-form-kind == "weekly": SelectableText {
+        x: 262px;
+        y: 349px;
+        width: 236px;
+        height: 18px;
+        text: "星期";
+        text-color: #334155;
+        text-size: 13px;
+        text-weight: 700;
+    }
+    if root.schedule-form-kind == "weekly": ComboBox {
+        x: 262px;
+        y: 375px;
+        width: 236px;
+        height: 38px;
+        model: ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+        current-value <=> root.schedule-form-weekday;
+    }
+    
+    if root.schedule-form-kind == "once": SelectableText {
+        x: 22px;
+        y: 349px;
+        width: 476px;
+        height: 18px;
+        text: "执行时间（YYYY-MM-DDTHH:MM:SS）";
+        text-color: #334155;
+        text-size: 13px;
+        text-weight: 700;
+    }
+    if root.schedule-form-kind == "once": LineEdit {
+        x: 22px;
+        y: 375px;
+        width: 476px;
+        height: 38px;
+        text <=> root.schedule-form-at;
+    }
+    
+    SelectableText {
+        x: 22px;
+        y: 438px;
+        width: 476px;
+        height: 36px;
+        text: root.modal-error == "" ? "每天/每周使用 HH:MM；单次使用 YYYY-MM-DDTHH:MM:SS。保存失败不会覆盖 global.json。" : root.modal-error;
+        text-color: root.modal-error == "" ? #64748b : #be123c;
+        text-size: 12px;
+        wrap: word-wrap;
+        single-line: false;
+    }
+    
+    DialogButton { x: 234px; y: 502px; text: "取消"; clicked => { root.close-modal(); } }
+    DialogButton {
+        x: 330px;
+        y: 502px;
+        text: root.schedule-form-index == "" ? "新增定时" : "保存定时";
+        primary: true;
+        width: 168px;
+        enabled: !root.running && (root.schedule-form-kind == "once" ? root.schedule-form-at != "" : root.schedule-form-time != "");
+        clicked => {
+            root.save-schedule(root.schedule-form-index, root.schedule-form-kind, root.schedule-form-time, root.schedule-form-weekday, root.schedule-form-at);
+        }
+    }
+}

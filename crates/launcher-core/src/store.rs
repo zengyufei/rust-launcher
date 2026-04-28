@@ -56,16 +56,16 @@ pub struct ItemUpdate {
 }
 
 pub fn default_data_dir() -> PathBuf {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let dev_data = cwd.join("data");
-    if dev_data.exists() || cwd.join("Cargo.toml").exists() {
-        return dev_data;
-    }
-
-    std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .map(|path| path.join("RustLauncher"))
-        .unwrap_or(dev_data)
+    let data_dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe_path| data_dir_next_to_executable(&exe_path))
+        .unwrap_or_else(|| {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join("data")
+        });
+    let _ = fs::create_dir_all(&data_dir);
+    data_dir
 }
 
 pub fn load_workspace(data_dir: &Path) -> Result<Workspace> {
@@ -923,6 +923,10 @@ fn validate_non_empty_target(item_id: &str, value: &str) -> Result<()> {
     }
 }
 
+fn data_dir_next_to_executable(exe_path: &Path) -> Option<PathBuf> {
+    exe_path.parent().map(|parent| parent.join("data"))
+}
+
 fn validate_schedule(schedule: &ScheduleRule) -> Result<()> {
     match schedule {
         ScheduleRule::Daily { time } | ScheduleRule::Weekly { time, .. } => {
@@ -1034,6 +1038,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_data_dir_is_next_to_executable() {
+        let exe_path = Path::new(r"C:\tools\launcher\launcher-gui.exe");
+
+        assert_eq!(
+            data_dir_next_to_executable(exe_path).unwrap(),
+            PathBuf::from(r"C:\tools\launcher\data")
+        );
+    }
 
     fn write_workspace(data_dir: &Path) {
         fs::create_dir_all(data_dir.join("plans")).unwrap();
