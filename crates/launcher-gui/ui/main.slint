@@ -69,7 +69,7 @@ export component AppWindow inherits Window {
     in-out property <string> schedule-form-at;
 
     callback select-plan(string);
-    callback select-node(string);
+    callback select-node(string, string);
     callback run-selected();
     callback search-changed(string);
     callback unavailable(string);
@@ -191,7 +191,7 @@ export component AppWindow inherits Window {
                 sequence-rows: root.sequence-rows;
                 open-add-item => { root.open-add-item(); }
                 bulk-action(action) => { root.bulk-action(action); }
-                select-node(node-id) => { root.select-node(node-id); }
+                select-node(node-id, mode) => { root.select-node(node-id, mode); }
                 open-edit-node(node-id) => { root.open-edit-node(node-id); }
             }
             InspectorPanel {

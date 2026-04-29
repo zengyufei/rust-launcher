@@ -1,6 +1,6 @@
 ﻿import { HorizontalBox, ListView, VerticalBox } from "std-widgets.slint";
 import { SequenceRow } from "models.slint";
-import { LabelText, Panel, PrimaryMiniButton, SectionTitle, SelectableText } from "components.slint";
+import { LabelText, Panel, PrimaryMiniButton, SectionTitle } from "components.slint";
 
 export component PlanStructurePanel inherits Panel {
     in property <string> selected-plan-title;
@@ -11,7 +11,7 @@ export component PlanStructurePanel inherits Panel {
 
     callback open-add-item();
     callback bulk-action(string);
-    callback select-node(string);
+    callback select-node(string, string);
     callback open-edit-node(string);
 
     horizontal-stretch: 1;
@@ -48,33 +48,8 @@ export component PlanStructurePanel inherits Panel {
 
                     Rectangle {
                         height: 42px;
-                        background: #f7f8fb;
-                        border-color: #e3e8f0;
-                        border-width: 1px;
-                        border-radius: 6px;
-                        SelectableText {
-                            x: 40px;
-                            y: 12px;
-                            width: parent.width - 52px;
-                            height: parent.height - 24px;
-                            text: root.selected-plan-file;
-                            text-color: #263247;
-                            text-size: 13px;
-                            vertical-alignment: center;
-                        }
-                        Image {
-                            x: 14px;
-                            y: 13px;
-                            width: 16px;
-                            height: 16px;
-                            source: @image-url("icons/braces.svg");
-                        }
-                    }
-
-                    if root.has-selection: Rectangle {
-                        height: 42px;
-                        background: #eef4ff;
-                        border-color: #bfd8f4;
+                        background: root.has-selection ? #eef4ff : #f7f8fb;
+                        border-color: root.has-selection ? #bfd8f4 : #e3e8f0;
                         border-width: 1px;
                         border-radius: 7px;
 
@@ -82,8 +57,8 @@ export component PlanStructurePanel inherits Panel {
                             padding: 6px;
                             spacing: 8px;
                             Text {
-                                text: root.selection-summary;
-                                color: #1c5fa8;
+                                text: root.has-selection ? root.selection-summary : "未选择启动项";
+                                color: root.has-selection ? #1c5fa8 : #60708a;
                                 font-size: 13px;
                                 font-weight: 700;
                                 vertical-alignment: center;
@@ -92,8 +67,8 @@ export component PlanStructurePanel inherits Panel {
                             Rectangle {
                                 width: 62px;
                                 height: 30px;
-                                background: bulk-delete-touch.pressed ? #ffd6d6 : (bulk-delete-touch.has-hover ? #ffe4e4 : #fff0f0);
-                                border-color: bulk-delete-touch.has-hover ? #e79a9a : #f0b8b8;
+                                background: !root.has-selection ? #f8fafc : (bulk-delete-touch.pressed ? #ffd6d6 : (bulk-delete-touch.has-hover ? #ffe4e4 : #fff0f0));
+                                border-color: !root.has-selection ? #d7dde6 : (bulk-delete-touch.has-hover ? #e79a9a : #f0b8b8);
                                 border-width: 1px;
                                 border-radius: 6px;
                                 Image {
@@ -102,58 +77,59 @@ export component PlanStructurePanel inherits Panel {
                                     width: 13px;
                                     height: 13px;
                                     source: @image-url("icons/trash-red.svg");
+                                    colorize: root.has-selection ? #00000000 : #94a3b8;
                                 }
                                 Text {
                                     x: 28px;
                                     width: parent.width - 32px;
                                     text: "删除";
-                                    color: #a32020;
+                                    color: root.has-selection ? #a32020 : #94a3b8;
                                     font-size: 12px;
                                     font-weight: 700;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
-                                bulk-delete-touch := TouchArea { clicked => { root.bulk-action("删除"); } }
+                                bulk-delete-touch := TouchArea { enabled: root.has-selection; clicked => { root.bulk-action("删除"); } }
                             }
                             Rectangle {
                                 width: 50px;
                                 height: 30px;
-                                background: bulk-group-touch.pressed ? #dfeeff : (bulk-group-touch.has-hover ? #eef6ff : #ffffff);
-                                border-color: bulk-group-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                background: !root.has-selection ? #f8fafc : (bulk-group-touch.pressed ? #dfeeff : (bulk-group-touch.has-hover ? #eef6ff : #ffffff));
+                                border-color: !root.has-selection ? #d7dde6 : (bulk-group-touch.has-hover ? #8eb8f5 : #bfd8f4);
                                 border-width: 1px;
                                 border-radius: 6px;
                                 Text {
                                     text: "组合";
-                                    color: #1c5fa8;
+                                    color: root.has-selection ? #1c5fa8 : #94a3b8;
                                     font-size: 12px;
                                     font-weight: 700;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
-                                bulk-group-touch := TouchArea { clicked => { root.bulk-action("组合"); } }
+                                bulk-group-touch := TouchArea { enabled: root.has-selection; clicked => { root.bulk-action("组合"); } }
                             }
                             Rectangle {
                                 width: 76px;
                                 height: 30px;
-                                background: bulk-ungroup-touch.pressed ? #dfeeff : (bulk-ungroup-touch.has-hover ? #eef6ff : #ffffff);
-                                border-color: bulk-ungroup-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                background: !root.has-selection ? #f8fafc : (bulk-ungroup-touch.pressed ? #dfeeff : (bulk-ungroup-touch.has-hover ? #eef6ff : #ffffff));
+                                border-color: !root.has-selection ? #d7dde6 : (bulk-ungroup-touch.has-hover ? #8eb8f5 : #bfd8f4);
                                 border-width: 1px;
                                 border-radius: 6px;
                                 Text {
                                     text: "取消组合";
-                                    color: #1c5fa8;
+                                    color: root.has-selection ? #1c5fa8 : #94a3b8;
                                     font-size: 12px;
                                     font-weight: 700;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
-                                bulk-ungroup-touch := TouchArea { clicked => { root.bulk-action("取消组合"); } }
+                                bulk-ungroup-touch := TouchArea { enabled: root.has-selection; clicked => { root.bulk-action("取消组合"); } }
                             }
                             Rectangle {
                                 width: 62px;
                                 height: 30px;
-                                background: bulk-up-touch.pressed ? #dfeeff : (bulk-up-touch.has-hover ? #eef6ff : #ffffff);
-                                border-color: bulk-up-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                background: !root.has-selection ? #f8fafc : (bulk-up-touch.pressed ? #dfeeff : (bulk-up-touch.has-hover ? #eef6ff : #ffffff));
+                                border-color: !root.has-selection ? #d7dde6 : (bulk-up-touch.has-hover ? #8eb8f5 : #bfd8f4);
                                 border-width: 1px;
                                 border-radius: 6px;
                                 Image {
@@ -162,24 +138,25 @@ export component PlanStructurePanel inherits Panel {
                                     width: 13px;
                                     height: 13px;
                                     source: @image-url("icons/arrow-up-blue.svg");
+                                    colorize: root.has-selection ? #00000000 : #94a3b8;
                                 }
                                 Text {
                                     x: 28px;
                                     width: parent.width - 32px;
                                     text: "上移";
-                                    color: #1c5fa8;
+                                    color: root.has-selection ? #1c5fa8 : #94a3b8;
                                     font-size: 12px;
                                     font-weight: 700;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
-                                bulk-up-touch := TouchArea { clicked => { root.bulk-action("上移"); } }
+                                bulk-up-touch := TouchArea { enabled: root.has-selection; clicked => { root.bulk-action("上移"); } }
                             }
                             Rectangle {
                                 width: 62px;
                                 height: 30px;
-                                background: bulk-down-touch.pressed ? #dfeeff : (bulk-down-touch.has-hover ? #eef6ff : #ffffff);
-                                border-color: bulk-down-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                background: !root.has-selection ? #f8fafc : (bulk-down-touch.pressed ? #dfeeff : (bulk-down-touch.has-hover ? #eef6ff : #ffffff));
+                                border-color: !root.has-selection ? #d7dde6 : (bulk-down-touch.has-hover ? #8eb8f5 : #bfd8f4);
                                 border-width: 1px;
                                 border-radius: 6px;
                                 Image {
@@ -188,58 +165,59 @@ export component PlanStructurePanel inherits Panel {
                                     width: 13px;
                                     height: 13px;
                                     source: @image-url("icons/arrow-down-blue.svg");
+                                    colorize: root.has-selection ? #00000000 : #94a3b8;
                                 }
                                 Text {
                                     x: 28px;
                                     width: parent.width - 32px;
                                     text: "下移";
-                                    color: #1c5fa8;
+                                    color: root.has-selection ? #1c5fa8 : #94a3b8;
                                     font-size: 12px;
                                     font-weight: 700;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
-                                bulk-down-touch := TouchArea { clicked => { root.bulk-action("下移"); } }
+                                bulk-down-touch := TouchArea { enabled: root.has-selection; clicked => { root.bulk-action("下移"); } }
                             }
                             Rectangle {
                                 width: 50px;
                                 height: 30px;
-                                background: bulk-top-touch.pressed ? #dfeeff : (bulk-top-touch.has-hover ? #eef6ff : #ffffff);
-                                border-color: bulk-top-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                background: !root.has-selection ? #f8fafc : (bulk-top-touch.pressed ? #dfeeff : (bulk-top-touch.has-hover ? #eef6ff : #ffffff));
+                                border-color: !root.has-selection ? #d7dde6 : (bulk-top-touch.has-hover ? #8eb8f5 : #bfd8f4);
                                 border-width: 1px;
                                 border-radius: 6px;
                                 Text {
                                     text: "置顶";
-                                    color: #1c5fa8;
+                                    color: root.has-selection ? #1c5fa8 : #94a3b8;
                                     font-size: 12px;
                                     font-weight: 700;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
-                                bulk-top-touch := TouchArea { clicked => { root.bulk-action("置顶"); } }
+                                bulk-top-touch := TouchArea { enabled: root.has-selection; clicked => { root.bulk-action("置顶"); } }
                             }
                             Rectangle {
                                 width: 50px;
                                 height: 30px;
-                                background: bulk-bottom-touch.pressed ? #dfeeff : (bulk-bottom-touch.has-hover ? #eef6ff : #ffffff);
-                                border-color: bulk-bottom-touch.has-hover ? #8eb8f5 : #bfd8f4;
+                                background: !root.has-selection ? #f8fafc : (bulk-bottom-touch.pressed ? #dfeeff : (bulk-bottom-touch.has-hover ? #eef6ff : #ffffff));
+                                border-color: !root.has-selection ? #d7dde6 : (bulk-bottom-touch.has-hover ? #8eb8f5 : #bfd8f4);
                                 border-width: 1px;
                                 border-radius: 6px;
                                 Text {
                                     text: "置底";
-                                    color: #1c5fa8;
+                                    color: root.has-selection ? #1c5fa8 : #94a3b8;
                                     font-size: 12px;
                                     font-weight: 700;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
-                                bulk-bottom-touch := TouchArea { clicked => { root.bulk-action("置底"); } }
+                                bulk-bottom-touch := TouchArea { enabled: root.has-selection; clicked => { root.bulk-action("置底"); } }
                             }
                         }
                     }
 
                     ListView {
-                        height: root.has-selection ? 446px : 500px;
+                        height: 500px;
                         vertical-stretch: 0;
                         for row in root.sequence-rows: row-frame := Rectangle {
                             height: row.kind == "group" ? 216px : 116px;
@@ -254,12 +232,6 @@ export component PlanStructurePanel inherits Panel {
                                 border-color: row.selected ? #9ec7f4 : (row-touch.has-hover ? (row.kind == "group" ? #e7bd78 : #bfd8f4) : (row.kind == "group" ? #f0d1a1 : #dde4ee));
                                 border-width: 1px;
                                 border-radius: 8px;
-
-                                row-touch := TouchArea {
-                                    clicked => {
-                                        root.select-node(row.id);
-                                    }
-                                }
 
                                 Rectangle {
                                     x: 12px;
@@ -277,6 +249,23 @@ export component PlanStructurePanel inherits Panel {
                                         height: 8px;
                                         background: #ffffff;
                                         border-radius: 2px;
+                                    }
+                                    checkbox-touch := TouchArea {
+                                        clicked => {
+                                            root.select-node(row.id, "toggle");
+                                        }
+                                    }
+                                }
+
+                                row-touch := TouchArea {
+                                    x: 36px;
+                                    y: 0px;
+                                    width: parent.width - 36px;
+                                    height: parent.height;
+                                    pointer-event(event) => {
+                                        if event.button == PointerEventButton.left && event.kind == PointerEventKind.up {
+                                            root.select-node(row.id, event.modifiers.shift ? "extend" : "replace");
+                                        }
                                     }
                                 }
 

@@ -93,14 +93,28 @@ fn main() -> Result<()> {
 
     let weak = app.as_weak();
     let state_for_node = Arc::clone(&state);
-    app.on_select_node(move |node_id| {
+    app.on_select_node(move |node_id, mode| {
         if let Some(app) = weak.upgrade() {
             let mut state = state_for_node.lock().expect("GUI state lock poisoned");
             let node_id = node_id.to_string();
-            if let Some(index) = state.selected_node_ids.iter().position(|id| id == &node_id) {
-                state.selected_node_ids.remove(index);
-            } else {
-                state.selected_node_ids.push(node_id);
+            match mode.as_str() {
+                "toggle" => {
+                    if let Some(index) = state.selected_node_ids.iter().position(|id| id == &node_id)
+                    {
+                        state.selected_node_ids.remove(index);
+                    } else {
+                        state.selected_node_ids.push(node_id);
+                    }
+                }
+                "extend" => {
+                    if !state.selected_node_ids.iter().any(|id| id == &node_id) {
+                        state.selected_node_ids.push(node_id);
+                    }
+                }
+                _ => {
+                    state.selected_node_ids.clear();
+                    state.selected_node_ids.push(node_id);
+                }
             }
             state.context_plan_id = None;
             drop(state);
