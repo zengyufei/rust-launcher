@@ -1,43 +1,34 @@
-import { ListView, VerticalBox } from "std-widgets.slint";
-import { LogRow } from "models.slint";
+import { TextEdit } from "std-widgets.slint";
 import { SelectableText } from "components.slint";
 
 export component ExecutionLogPanel inherits Rectangle {
-    in property <[LogRow]> log-rows;
+    in property <string> log-text;
 
-    height: 200px;
-    vertical-stretch: 0;
+    height: 240px;
     background: #eef4ff;
     border-color: #c7d8f2;
     border-width: 1px;
 
-    VerticalBox {
-        padding: 8px;
-        spacing: 4px;
-        SelectableText {
-            text: "执行日志";
-            text-color: #1f3b64;
-            text-size: 14px;
-            text-weight: 700;
-            height: 20px;
-        }
-        ListView {
-            height: 154px;
-            vertical-stretch: 0;
-            for row in root.log-rows: Rectangle {
-                height: 24px;
-                background: #00000000;
+    SelectableText {
+        x: 8px;
+        y: 8px;
+        width: parent.width - 16px;
+        height: 20px;
+        text: "执行日志";
+        text-color: #1f3b64;
+        text-size: 14px;
+        text-weight: 700;
+    }
 
-                SelectableText {
-                    x: 0px;
-                    y: 3px;
-                    width: parent.width - 10px;
-                    height: 18px;
-                    text: row.message;
-                    text-color: row.level == "error" ? #a32020 : #1f3b64;
-                    text-size: 12px;
-                }
-            }
-        }
+    TextEdit {
+        x: 8px;
+        y: 32px;
+        width: parent.width - 16px;
+        height: parent.height - 40px;
+        text: root.log-text;
+        read-only: true;
+        wrap: no-wrap;
+        font-family: "Microsoft YaHei UI";
+        font-size: 12px;
     }
 }

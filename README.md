@@ -25,6 +25,7 @@ Rust Launcher 是一个原生 Rust 快速启动器：你可以把文件夹、文
 ### 当前能力
 
 - Windows 优先：文件、文件夹、媒体、URL 使用系统默认方式打开。
+- Windows 下尽量静默：`path/url` 直接走系统 Shell 打开，`command` 默认隐藏启动器产生的控制台窗口。
 - JSON 持久化：`global.json` 管方案目录、启用状态、触发方式和定时；每个方案一个独立 JSON。
 - 顺序编排：方案内按顺序执行，组内按顺序执行。
 - 延迟控制：组和单个启动项均支持前置/后置延迟。
@@ -267,6 +268,7 @@ Rust Launcher is a native Rust launcher for turning files, folders, programs, mu
 ### What It Does
 
 - Opens paths, programs, URLs, and explicit shell commands.
+- Minimizes Windows console flashes by opening paths/URLs through the system shell and running `command` items without an extra launcher console window by default.
 - Stores global settings in `global.json` and each plan in its own JSON file.
 - Runs plan sequences in order, including groups and standalone items.
 - Supports pre/post delays on groups and items.

@@ -42,7 +42,18 @@ pub struct ItemExecution {
 }
 
 pub fn execute_plan(plan: &Plan, options: ExecuteOptions) -> ExecutionReport {
-    execute_plan_with_adapter(plan, options, &SystemLauncher)
+    execute_plan_with_progress(plan, options, |_| {})
+}
+
+pub fn execute_plan_with_progress<F>(
+    plan: &Plan,
+    options: ExecuteOptions,
+    on_item: F,
+) -> ExecutionReport
+where
+    F: FnMut(&ItemExecution),
+{
+    execute_plan_with_adapter_and_progress(plan, options, &SystemLauncher, on_item)
 }
 
 pub fn execute_plan_with_adapter(
@@ -50,6 +61,18 @@ pub fn execute_plan_with_adapter(
     options: ExecuteOptions,
     adapter: &dyn LaunchAdapter,
 ) -> ExecutionReport {
+    execute_plan_with_adapter_and_progress(plan, options, adapter, |_| {})
+}
+
+pub fn execute_plan_with_adapter_and_progress<F>(
+    plan: &Plan,
+    options: ExecuteOptions,
+    adapter: &dyn LaunchAdapter,
+    mut on_item: F,
+) -> ExecutionReport
+where
+    F: FnMut(&ItemExecution),
+{
     let mut report = ExecutionReport {
         plan_id: plan.id.clone(),
         dry_run: options.dry_run,
@@ -63,6 +86,7 @@ pub fn execute_plan_with_adapter(
                 sleep_if_needed(group.pre_delay_ms, options.dry_run);
                 for item in &group.items {
                     let execution = execute_item(item, Some(group.id.clone()), options, adapter);
+                    on_item(&execution);
                     let should_stop = !execution.success && group.on_failure == FailurePolicy::Stop;
                     report.items.push(execution);
                     if should_stop {
@@ -74,6 +98,7 @@ pub fn execute_plan_with_adapter(
             }
             SequenceNode::Item(item) => {
                 let execution = execute_item(item, None, options, adapter);
+                on_item(&execution);
                 let should_stop = !execution.success && item.on_failure == FailurePolicy::Stop;
                 report.items.push(execution);
                 if should_stop {
@@ -92,9 +117,22 @@ pub fn execute_single_item(
     item_id: &str,
     options: ExecuteOptions,
 ) -> Result<ExecutionReport> {
+    execute_single_item_with_progress(plan, item_id, options, |_| {})
+}
+
+pub fn execute_single_item_with_progress<F>(
+    plan: &Plan,
+    item_id: &str,
+    options: ExecuteOptions,
+    mut on_item: F,
+) -> Result<ExecutionReport>
+where
+    F: FnMut(&ItemExecution),
+{
     let item =
         find_item(plan, item_id).ok_or_else(|| LauncherError::ItemNotFound(item_id.to_string()))?;
     let execution = execute_item(item, None, options, &SystemLauncher);
+    on_item(&execution);
     Ok(ExecutionReport {
         plan_id: plan.id.clone(),
         dry_run: options.dry_run,
@@ -164,7 +202,9 @@ fn find_item<'a>(plan: &'a Plan, item_id: &str) -> Option<&'a LaunchItem> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        executor::{execute_plan_with_adapter, ExecuteOptions},
+        executor::{
+            execute_plan_with_adapter, execute_plan_with_adapter_and_progress, ExecuteOptions,
+        },
         model::{FailurePolicy, LaunchItem, LaunchTarget, Plan, SequenceNode},
         platform::LaunchAdapter,
         LauncherError, Result,
@@ -247,6 +287,30 @@ mod tests {
         assert_eq!(report.items.len(), 2);
         assert_eq!(report.failure_count(), 1);
         assert_eq!(report.success_count(), 1);
+    }
+
+    #[test]
+    fn progress_callback_runs_in_execution_order() {
+        let plan = Plan {
+            version: 2,
+            id: "work".to_string(),
+            name: "Work".to_string(),
+            sequence: vec![
+                SequenceNode::Item(item("one", "ok", FailurePolicy::Continue)),
+                SequenceNode::Item(item("two", "ok", FailurePolicy::Continue)),
+            ],
+        };
+        let mut seen = Vec::new();
+
+        let report = execute_plan_with_adapter_and_progress(
+            &plan,
+            ExecuteOptions { dry_run: false },
+            &FakeLauncher,
+            |item| seen.push(item.item_id.clone()),
+        );
+
+        assert_eq!(seen, vec!["one".to_string(), "two".to_string()]);
+        assert_eq!(report.items.len(), 2);
     }
 
     fn item(id: &str, command: &str, on_failure: FailurePolicy) -> LaunchItem {

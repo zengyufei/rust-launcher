@@ -10,12 +10,13 @@ use std::{
 
 use launcher_core::{
     add_item, add_plan_schedule, combine_root_items, create_plan_with_file, default_data_dir,
-    delete_group, delete_item, delete_plan, delete_plan_schedule, execute_plan, export_plan,
-    import_plan, load_workspace, move_plan, move_sequence_node, rename_plan, set_plan_enabled,
-    set_plan_launch_trigger, ungroup, update_group, update_item, update_plan_schedule,
-    validate_workspace, ExecuteOptions, ExecutionReport, FailurePolicy, Group, GroupUpdate,
-    ItemUpdate, LaunchItem, LaunchTarget, LaunchTrigger, LauncherError, NodeMoveDirection, Plan,
-    PlanCatalogEntry, PlanMoveDirection, ScheduleRule, Scheduler, SequenceNode, Weekday, Workspace,
+    delete_group, delete_item, delete_plan, delete_plan_schedule, execute_plan_with_progress,
+    export_plan, import_plan, load_workspace, move_plan, move_sequence_node, rename_plan,
+    set_plan_enabled, set_plan_launch_trigger, ungroup, update_group, update_item,
+    update_plan_schedule, validate_workspace, ExecuteOptions, ExecutionReport, FailurePolicy,
+    Group, GroupUpdate, ItemExecution, ItemUpdate, LaunchItem, LaunchTarget, LaunchTrigger,
+    LauncherError, NodeMoveDirection, Plan, PlanCatalogEntry, PlanMoveDirection, ScheduleRule,
+    Scheduler, SequenceNode, Weekday, Workspace,
 };
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
@@ -39,6 +40,12 @@ struct GuiState {
     pending_import_path: Option<PathBuf>,
     pending_import_name: Option<String>,
     pending_import_file: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct LogRow {
+    level: SharedString,
+    message: SharedString,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2019,7 +2026,7 @@ fn render(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
         app.set_launch_rows(model_from(Vec::new()));
         app.set_schedule_visible(false);
         app.set_schedule_rows(model_from(Vec::new()));
-        app.set_log_rows(model_from(state.logs.clone()));
+        app.set_log_text(log_text(&state.logs).into());
         return;
     };
 
@@ -2045,7 +2052,7 @@ fn render(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
         selected_entry.is_some_and(|entry| entry.launch.trigger == LaunchTrigger::AutoOnAppStart),
     );
     app.set_schedule_rows(model_from(schedule_rows(selected_entry)));
-    app.set_log_rows(model_from(state.logs.clone()));
+    app.set_log_text(log_text(&state.logs).into());
 
     app.set_selected_plan_title(
         selected_plan
@@ -2103,14 +2110,28 @@ fn start_run(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
     let weak = app.as_weak();
     let state = Arc::clone(state);
     thread::spawn(move || {
-        let result = run_plan_by_id(&plan_id);
+        let result = run_plan_by_id(&plan_id, {
+            let weak = weak.clone();
+            let state = Arc::clone(&state);
+            move |item| {
+                let weak = weak.clone();
+                let state = Arc::clone(&state);
+                let item = item.clone();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak.upgrade() {
+                        append_item_log(&state, &item);
+                        render(&app, &state);
+                    }
+                });
+            }
+        });
         let _ = slint::invoke_from_event_loop(move || {
             if let Some(app) = weak.upgrade() {
                 {
                     let mut state = state.lock().expect("GUI state lock poisoned");
                     state.running = false;
                     state.selected_plan_id = Some(plan_id.clone());
-                    state.logs.extend(report_logs(result));
+                    state.logs.extend(report_summary_logs(result));
                 }
                 load_workspace_into_state(&state);
                 render(&app, &state);
@@ -2119,7 +2140,10 @@ fn start_run(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
     });
 }
 
-fn run_plan_by_id(plan_id: &str) -> std::result::Result<ExecutionReport, String> {
+fn run_plan_by_id<F>(plan_id: &str, on_item: F) -> std::result::Result<ExecutionReport, String>
+where
+    F: FnMut(&ItemExecution),
+{
     let data_dir = default_data_dir();
     let workspace = load_workspace(&data_dir)
         .and_then(|workspace| {
@@ -2132,7 +2156,11 @@ fn run_plan_by_id(plan_id: &str) -> std::result::Result<ExecutionReport, String>
         .iter()
         .find(|plan| plan.id == plan_id)
         .ok_or_else(|| format!("方案不存在: {plan_id}"))?;
-    Ok(execute_plan(plan, ExecuteOptions { dry_run: false }))
+    Ok(execute_plan_with_progress(
+        plan,
+        ExecuteOptions { dry_run: false },
+        on_item,
+    ))
 }
 
 fn start_scheduler_loop(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
@@ -2171,12 +2199,26 @@ fn start_scheduler_loop(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
                             return;
                         }
 
-                        let result = run_plan_by_id(&plan_id);
+                        let result = run_plan_by_id(&plan_id, {
+                            let progress_state = Arc::clone(&state);
+                            let progress_weak = weak.clone();
+                            move |item| {
+                                let progress_state = Arc::clone(&progress_state);
+                                let progress_weak = progress_weak.clone();
+                                let item = item.clone();
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if let Some(app) = progress_weak.upgrade() {
+                                        append_item_log(&progress_state, &item);
+                                        render(&app, &progress_state);
+                                    }
+                                });
+                            }
+                        });
                         {
                             let mut state = state.lock().expect("GUI state lock poisoned");
                             state.running = false;
                             state.selected_plan_id = Some(plan_id.clone());
-                            state.logs.extend(report_logs(result));
+                            state.logs.extend(report_summary_logs(result));
                         }
                         let complete_state = Arc::clone(&state);
                         let complete_weak = weak.clone();
@@ -2252,10 +2294,10 @@ fn begin_scheduled_run(state: &Arc<Mutex<GuiState>>, plan_id: &str, reason: &str
     true
 }
 
-fn report_logs(result: std::result::Result<ExecutionReport, String>) -> Vec<LogRow> {
+fn report_summary_logs(result: std::result::Result<ExecutionReport, String>) -> Vec<LogRow> {
     match result {
         Ok(report) => {
-            let mut rows = vec![log_row(
+            vec![log_row(
                 if report.failure_count() == 0 {
                     "info"
                 } else {
@@ -2268,26 +2310,30 @@ fn report_logs(result: std::result::Result<ExecutionReport, String>) -> Vec<LogR
                     report.failure_count(),
                     report.stopped
                 ),
-            )];
-            for item in report.items {
-                let scope = item
-                    .group_id
-                    .map(|group_id| format!("{group_id}/{}", item.item_id))
-                    .unwrap_or(item.item_id);
-                rows.push(log_row(
-                    if item.success { "info" } else { "error" },
-                    format!(
-                        "{}  {}  {}",
-                        if item.success { "成功" } else { "失败" },
-                        scope,
-                        item.message
-                    ),
-                ));
-            }
-            rows
+            )]
         }
         Err(error) => vec![log_row("error", format!("运行失败: {error}"))],
     }
+}
+
+fn item_scope(item: &ItemExecution) -> String {
+    item.group_id
+        .as_ref()
+        .map(|group_id| format!("{group_id}/{}", item.item_id))
+        .unwrap_or_else(|| item.item_id.clone())
+}
+
+fn append_item_log(state: &Arc<Mutex<GuiState>>, item: &ItemExecution) {
+    append_log(
+        state,
+        if item.success { "info" } else { "error" },
+        format!(
+            "{}  {}  {}",
+            if item.success { "成功" } else { "失败" },
+            item_scope(item),
+            item.message
+        ),
+    );
 }
 
 fn selected_plan_id<'a>(state: &'a GuiState, workspace: &'a Workspace) -> Option<&'a str> {
@@ -2659,6 +2705,13 @@ fn log_row(level: impl Into<SharedString>, message: impl Into<SharedString>) -> 
         level: level.into(),
         message: message.into(),
     }
+}
+
+fn log_text(rows: &[LogRow]) -> String {
+    rows.iter()
+        .map(|row| format!("[{}] {}", row.level, row.message))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn inspector_row(label: impl Into<SharedString>, value: impl Into<SharedString>) -> InspectorRow {

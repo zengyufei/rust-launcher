@@ -1,5 +1,5 @@
 ﻿import { HorizontalBox, VerticalBox } from "std-widgets.slint";
-import { PlanRow, SequenceRow, InspectorRow, LogRow } from "models.slint";
+import { PlanRow, SequenceRow, InspectorRow } from "models.slint";
 import { SelectableText } from "components.slint";
 import { PlanContextMenu } from "context_menu.slint";
 import { ModalLayer } from "dialogs.slint";
@@ -30,7 +30,7 @@ export component AppWindow inherits Window {
     in property <[InspectorRow]> launch-rows;
     in property <bool> schedule-visible;
     in property <[InspectorRow]> schedule-rows;
-    in property <[LogRow]> log-rows;
+    in property <string> log-text;
     in property <bool> context-menu-visible;
     in property <string> context-plan-id;
     in property <bool> context-plan-enabled;
@@ -207,7 +207,7 @@ export component AppWindow inherits Window {
         }
 
         ExecutionLogPanel {
-            log-rows: root.log-rows;
+            log-text: root.log-text;
         }
     }
 

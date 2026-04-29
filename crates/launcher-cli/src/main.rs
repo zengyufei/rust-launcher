@@ -7,13 +7,14 @@ use std::{
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use launcher_core::{
     add_group, add_item as store_add_item, add_plan_schedule, create_plan, create_plan_with_file,
-    default_data_dir, delete_group, delete_item, delete_plan, delete_plan_schedule, execute_plan,
-    execute_single_item, export_plan, import_plan, load_global, load_plan, load_workspace,
-    move_item, move_item_to_group, move_item_to_root, move_plan, move_sequence_node, rename_plan,
-    set_plan_enabled, set_plan_launch_trigger, update_group, update_item, validate_workspace,
-    CommandShell, ExecuteOptions, ExecutionReport, FailurePolicy, GlobalConfig, Group, GroupUpdate,
-    ItemUpdate, LaunchItem, LaunchTarget, LaunchTrigger, LauncherError, NodeMoveDirection, Plan,
-    PlanCatalogEntry, PlanMoveDirection, ScheduleRule, Scheduler, SequenceNode, Weekday,
+    default_data_dir, delete_group, delete_item, delete_plan, delete_plan_schedule,
+    execute_plan_with_progress, execute_single_item_with_progress, export_plan, import_plan,
+    load_global, load_plan, load_workspace, move_item, move_item_to_group, move_item_to_root,
+    move_plan, move_sequence_node, rename_plan, set_plan_enabled, set_plan_launch_trigger,
+    update_group, update_item, validate_workspace, CommandShell, ExecuteOptions, ExecutionReport,
+    FailurePolicy, GlobalConfig, Group, GroupUpdate, ItemExecution, ItemUpdate, LaunchItem,
+    LaunchTarget, LaunchTrigger, LauncherError, NodeMoveDirection, Plan, PlanCatalogEntry,
+    PlanMoveDirection, ScheduleRule, Scheduler, SequenceNode, Weekday,
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -445,8 +446,10 @@ fn main() -> Result<()> {
             let workspace = load_workspace(&data_dir)?;
             validate_workspace(&workspace)?;
             let plan = find_plan(&workspace.plans, &plan_id)?;
-            let report = execute_plan(plan, ExecuteOptions { dry_run });
-            print_report(&report);
+            let report = execute_plan_with_progress(plan, ExecuteOptions { dry_run }, |item| {
+                print_item_execution(item)
+            });
+            print_report_summary(&report);
         }
         Command::RunItem {
             plan_id,
@@ -456,8 +459,13 @@ fn main() -> Result<()> {
             let workspace = load_workspace(&data_dir)?;
             validate_workspace(&workspace)?;
             let plan = find_plan(&workspace.plans, &plan_id)?;
-            let report = execute_single_item(plan, &item_id, ExecuteOptions { dry_run })?;
-            print_report(&report);
+            let report = execute_single_item_with_progress(
+                plan,
+                &item_id,
+                ExecuteOptions { dry_run },
+                |item| print_item_execution(item),
+            )?;
+            print_report_summary(&report);
         }
         Command::Daemon => run_daemon(&data_dir)?,
         Command::NewPlan { id, name } => {
@@ -904,8 +912,10 @@ fn run_daemon(data_dir: &Path) -> Result<()> {
     for due in Scheduler::auto_on_app_start(&workspace.global) {
         if let Some(plan) = workspace.plans.iter().find(|plan| plan.id == due.plan_id) {
             println!("auto start: {} ({})", due.plan_id, due.reason);
-            let report = execute_plan(plan, ExecuteOptions { dry_run: false });
-            print_report(&report);
+            let report = execute_plan_with_progress(plan, ExecuteOptions { dry_run: false }, |item| {
+                print_item_execution(item)
+            });
+            print_report_summary(&report);
         }
     }
 
@@ -915,8 +925,11 @@ fn run_daemon(data_dir: &Path) -> Result<()> {
         for due in scheduler.due_now(&workspace.global) {
             if let Some(plan) = workspace.plans.iter().find(|plan| plan.id == due.plan_id) {
                 println!("scheduled start: {} ({})", due.plan_id, due.reason);
-                let report = execute_plan(plan, ExecuteOptions { dry_run: false });
-                print_report(&report);
+                let report =
+                    execute_plan_with_progress(plan, ExecuteOptions { dry_run: false }, |item| {
+                        print_item_execution(item)
+                    });
+                print_report_summary(&report);
             }
         }
         thread::sleep(Duration::from_secs(30));
@@ -1021,7 +1034,24 @@ fn print_sequence(plan: &Plan) {
     }
 }
 
-fn print_report(report: &ExecutionReport) {
+fn item_scope(item: &ItemExecution) -> String {
+    item.group_id
+        .as_ref()
+        .map(|group| format!("{group}/{}", item.item_id))
+        .unwrap_or_else(|| item.item_id.clone())
+}
+
+fn print_item_execution(item: &ItemExecution) {
+    println!(
+        "- [{}] {} -> {} ({})",
+        if item.success { "ok" } else { "failed" },
+        item_scope(item),
+        item.target,
+        item.message
+    );
+}
+
+fn print_report_summary(report: &ExecutionReport) {
     println!(
         "plan={} dry_run={} success={} failure={} stopped={}",
         report.plan_id,
@@ -1030,20 +1060,6 @@ fn print_report(report: &ExecutionReport) {
         report.failure_count(),
         report.stopped
     );
-    for item in &report.items {
-        let scope = item
-            .group_id
-            .as_ref()
-            .map(|group| format!("{group}/{}", item.item_id))
-            .unwrap_or_else(|| item.item_id.clone());
-        println!(
-            "- [{}] {} -> {} ({})",
-            if item.success { "ok" } else { "failed" },
-            scope,
-            item.target,
-            item.message
-        );
-    }
 }
 
 fn validation_error(message: impl Into<String>) -> Box<dyn std::error::Error> {

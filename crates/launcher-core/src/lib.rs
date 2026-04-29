@@ -7,8 +7,9 @@ pub mod store;
 
 pub use error::{LauncherError, Result};
 pub use executor::{
-    execute_plan, execute_plan_with_adapter, execute_single_item, ExecuteOptions, ExecutionReport,
-    ItemExecution,
+    execute_plan, execute_plan_with_adapter, execute_plan_with_adapter_and_progress,
+    execute_plan_with_progress, execute_single_item, execute_single_item_with_progress,
+    ExecuteOptions, ExecutionReport, ItemExecution,
 };
 pub use model::{
     CommandShell, FailurePolicy, GlobalConfig, Group, LaunchConfig, LaunchItem, LaunchTarget,
