@@ -6,6 +6,7 @@ export component PlanStructurePanel inherits Panel {
     in property <string> selected-plan-title;
     in property <string> selected-plan-file;
     in property <bool> has-selection;
+    in property <bool> can-copy-selection;
     in property <string> selection-summary;
     in property <[SequenceRow]> sequence-rows;
 
@@ -63,6 +64,33 @@ export component PlanStructurePanel inherits Panel {
                                 font-weight: 700;
                                 vertical-alignment: center;
                                 horizontal-stretch: 1;
+                            }
+                            Rectangle {
+                                width: 62px;
+                                height: 30px;
+                                background: !root.can-copy-selection ? #f8fafc : (bulk-copy-touch.pressed ? #dfeeff : (bulk-copy-touch.has-hover ? #eef6ff : #ffffff));
+                                border-color: !root.can-copy-selection ? #d7dde6 : (bulk-copy-touch.has-hover ? #8eb8f5 : #bfd8f4);
+                                border-width: 1px;
+                                border-radius: 6px;
+                                Image {
+                                    x: 9px;
+                                    y: 8px;
+                                    width: 13px;
+                                    height: 13px;
+                                    source: @image-url("icons/export-gray.svg");
+                                    colorize: root.can-copy-selection ? #1c5fa8 : #94a3b8;
+                                }
+                                Text {
+                                    x: 28px;
+                                    width: parent.width - 32px;
+                                    text: "复制";
+                                    color: root.can-copy-selection ? #1c5fa8 : #94a3b8;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                bulk-copy-touch := TouchArea { enabled: root.can-copy-selection; clicked => { root.bulk-action("复制"); } }
                             }
                             Rectangle {
                                 width: 62px;

@@ -26,7 +26,7 @@ export component PlanContextMenu inherits Rectangle {
         x: 302px;
         y: 212px;
         width: 184px;
-        height: 294px;
+        height: 328px;
         background: #ffffff;
         border-color: #cbd5e1;
         border-width: 1px;
@@ -47,6 +47,12 @@ export component PlanContextMenu inherits Rectangle {
                 icon: @image-url("icons/export-gray.svg");
                 emphasized: true;
                 clicked => { root.plan-menu-action(root.context-plan-id, "导出方案"); }
+            }
+            PlanMenuRow {
+                text: "复制方案";
+                icon: @image-url("icons/export-gray.svg");
+                emphasized: true;
+                clicked => { root.plan-menu-action(root.context-plan-id, "复制方案"); }
             }
             PlanMenuRow {
                 text: "删除方案";

@@ -19,10 +19,10 @@ pub use model::{
 pub use scheduler::{DuePlan, Scheduler};
 pub use store::{
     add_group, add_item, add_plan_schedule, combine_root_items, create_plan, create_plan_with_file,
-    default_data_dir, delete_group, delete_item, delete_plan, delete_plan_schedule, export_plan,
-    import_plan, load_global, load_plan, load_workspace, move_item, move_item_to_group,
-    move_item_to_root, move_plan, move_sequence_node, rename_plan, save_global, save_plan,
-    set_plan_enabled, set_plan_launch_trigger, ungroup, update_group, update_item,
-    update_plan_schedule, validate_workspace, GroupUpdate, ItemUpdate, NodeMoveDirection,
-    PlanMoveDirection, Workspace,
+    default_data_dir, delete_group, delete_item, delete_plan, delete_plan_schedule, duplicate_plan,
+    duplicate_root_item, export_plan, import_plan, load_global, load_plan, load_workspace,
+    move_item, move_item_to_group, move_item_to_root, move_plan, move_sequence_node, rename_plan,
+    replace_item, save_global, save_plan, set_plan_enabled, set_plan_launch_trigger, ungroup,
+    update_group, update_item, update_plan_schedule, update_plan_identity, validate_workspace,
+    GroupUpdate, ItemUpdate, NodeMoveDirection, PlanMoveDirection, Workspace,
 };

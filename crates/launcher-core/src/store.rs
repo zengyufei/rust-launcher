@@ -212,6 +212,92 @@ pub fn rename_plan(data_dir: &Path, id: &str, name: &str) -> Result<Plan> {
     Ok(plan)
 }
 
+pub fn update_plan_identity(
+    data_dir: &Path,
+    current_id: &str,
+    new_id: &str,
+    new_name: &str,
+) -> Result<Plan> {
+    validate_id("plan id", new_id)?;
+    if new_name.trim().is_empty() {
+        return Err(validation_error("plan name must not be empty"));
+    }
+
+    let mut global = load_global(data_dir)?;
+    let index = find_plan_entry_index(&global, current_id)?;
+    let old_file = global.plans[index].file.clone();
+    let new_file = format!("plans/{new_id}.json");
+    validate_relative_file(&new_file)?;
+
+    if current_id != new_id && global.plans.iter().any(|entry| entry.id == new_id) {
+        return Err(validation_error(format!("plan id already exists: {new_id}")));
+    }
+    if old_file != new_file && data_dir.join(&new_file).exists() {
+        return Err(validation_error(format!("plan file already exists: {new_file}")));
+    }
+
+    let (_, mut plan) = load_plan_by_id(data_dir, current_id)?;
+    plan.id = new_id.to_string();
+    plan.name = new_name.to_string();
+    global.plans[index].id = new_id.to_string();
+    global.plans[index].file = new_file.clone();
+
+    validate_pending_workspace(data_dir, &global, Some(&plan))?;
+    save_plan(data_dir, &new_file, &plan)?;
+    save_global(data_dir, &global)?;
+    if old_file != new_file {
+        remove_file_if_exists(&data_dir.join(old_file))?;
+    }
+    Ok(plan)
+}
+
+pub fn duplicate_plan(data_dir: &Path, plan_id: &str) -> Result<Plan> {
+    let workspace = load_workspace(data_dir)?;
+    validate_workspace(&workspace)?;
+    let original_plan = workspace
+        .plans
+        .iter()
+        .find(|plan| plan.id == plan_id)
+        .ok_or_else(|| LauncherError::PlanNotFound(plan_id.to_string()))?;
+    let original_entry = workspace
+        .global
+        .plans
+        .iter()
+        .find(|entry| entry.id == plan_id)
+        .ok_or_else(|| LauncherError::PlanNotFound(plan_id.to_string()))?;
+
+    let existing_plan_ids = workspace
+        .global
+        .plans
+        .iter()
+        .map(|entry| entry.id.as_str())
+        .collect::<HashSet<_>>();
+    let existing_plan_names = workspace
+        .plans
+        .iter()
+        .map(|plan| plan.name.as_str())
+        .collect::<HashSet<_>>();
+    let new_id = next_numbered_id(plan_id, &existing_plan_ids);
+    let new_name = next_numbered_name(&original_plan.name, &existing_plan_names);
+    let new_file = format!("plans/{new_id}.json");
+
+    let mut global = workspace.global.clone();
+    let mut plan = original_plan.clone();
+    plan.id = new_id.clone();
+    plan.name = new_name.clone();
+    global.plans.push(PlanCatalogEntry {
+        id: new_id.clone(),
+        file: new_file.clone(),
+        enabled: original_entry.enabled,
+        launch: original_entry.launch.clone(),
+    });
+
+    validate_pending_workspace(data_dir, &global, Some(&plan))?;
+    save_plan(data_dir, &new_file, &plan)?;
+    save_global(data_dir, &global)?;
+    Ok(plan)
+}
+
 pub fn delete_plan(data_dir: &Path, id: &str, delete_file: bool) -> Result<PlanCatalogEntry> {
     let mut global = load_global(data_dir)?;
     let index = find_plan_entry_index(&global, id)?;
@@ -344,6 +430,41 @@ pub fn add_item(
         plan.sequence.push(SequenceNode::Item(item));
     }
     save_changed_plan(data_dir, &file, &plan)
+}
+
+pub fn replace_item(
+    data_dir: &Path,
+    plan_id: &str,
+    item_id: &str,
+    replacement: LaunchItem,
+) -> Result<()> {
+    let (file, mut plan) = load_plan_by_id(data_dir, plan_id)?;
+    if replacement.id != item_id {
+        ensure_unique_id(&plan, &replacement.id)?;
+    }
+    replace_item_in_plan(&mut plan, item_id, replacement)?;
+    save_changed_plan(data_dir, &file, &plan)
+}
+
+pub fn duplicate_root_item(data_dir: &Path, plan_id: &str, item_id: &str) -> Result<LaunchItem> {
+    let (file, mut plan) = load_plan_by_id(data_dir, plan_id)?;
+    let original = plan
+        .sequence
+        .iter()
+        .find_map(|node| match node {
+            SequenceNode::Item(item) if item.id == item_id => Some(item.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| validation_error(format!("root-level item not found: {item_id}")))?;
+
+    let existing_ids = collect_plan_ids(&plan);
+    let existing_names = collect_item_names(&plan);
+    let mut duplicate = original.clone();
+    duplicate.id = next_numbered_id(&original.id, &existing_ids);
+    duplicate.name = next_numbered_name(&original.name, &existing_names);
+    plan.sequence.push(SequenceNode::Item(duplicate.clone()));
+    save_changed_plan(data_dir, &file, &plan)?;
+    Ok(duplicate)
 }
 
 pub fn update_item(
@@ -526,6 +647,16 @@ fn validate_pending_workspace(
     })
 }
 
+fn remove_file_if_exists(path: &Path) -> Result<()> {
+    if path.exists() {
+        fs::remove_file(path).map_err(|source| LauncherError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    }
+    Ok(())
+}
+
 fn move_plan_entry(
     global: &mut GlobalConfig,
     id: &str,
@@ -639,6 +770,26 @@ fn find_item_mut<'a>(plan: &'a mut Plan, item_id: &str) -> Result<&'a mut Launch
     Err(LauncherError::ItemNotFound(item_id.to_string()))
 }
 
+fn replace_item_in_plan(plan: &mut Plan, item_id: &str, replacement: LaunchItem) -> Result<()> {
+    for node in &mut plan.sequence {
+        match node {
+            SequenceNode::Item(item) if item.id == item_id => {
+                *item = replacement;
+                return Ok(());
+            }
+            SequenceNode::Group(group) => {
+                if let Some(index) = group.items.iter().position(|item| item.id == item_id) {
+                    group.items[index] = replacement;
+                    return Ok(());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Err(LauncherError::ItemNotFound(item_id.to_string()))
+}
+
 fn ensure_unique_id(plan: &Plan, id: &str) -> Result<()> {
     validate_id("id", id)?;
     if plan.sequence.iter().any(|node| node.id() == id)
@@ -650,6 +801,64 @@ fn ensure_unique_id(plan: &Plan, id: &str) -> Result<()> {
         return Err(validation_error(format!("duplicate id in plan: {id}")));
     }
     Ok(())
+}
+
+fn collect_plan_ids<'a>(plan: &'a Plan) -> HashSet<&'a str> {
+    let mut ids = HashSet::new();
+    for node in &plan.sequence {
+        match node {
+            SequenceNode::Group(group) => {
+                ids.insert(group.id.as_str());
+                for item in &group.items {
+                    ids.insert(item.id.as_str());
+                }
+            }
+            SequenceNode::Item(item) => {
+                ids.insert(item.id.as_str());
+            }
+        }
+    }
+    ids
+}
+
+fn collect_item_names<'a>(plan: &'a Plan) -> HashSet<&'a str> {
+    let mut names = HashSet::new();
+    for node in &plan.sequence {
+        match node {
+            SequenceNode::Group(group) => {
+                for item in &group.items {
+                    names.insert(item.name.as_str());
+                }
+            }
+            SequenceNode::Item(item) => {
+                names.insert(item.name.as_str());
+            }
+        }
+    }
+    names
+}
+
+fn next_numbered_name(base: &str, existing: &HashSet<&str>) -> String {
+    let trimmed = base.trim();
+    let mut index = 2;
+    loop {
+        let candidate = format!("{trimmed} {index}");
+        if !existing.contains(candidate.as_str()) {
+            return candidate;
+        }
+        index += 1;
+    }
+}
+
+fn next_numbered_id(base: &str, existing: &HashSet<&str>) -> String {
+    let mut index = 2;
+    loop {
+        let candidate = format!("{base}-{index}");
+        if !existing.contains(candidate.as_str()) {
+            return candidate;
+        }
+        index += 1;
+    }
 }
 
 fn remove_item(plan: &mut Plan, item_id: &str) -> Result<()> {
@@ -1210,6 +1419,38 @@ mod tests {
     }
 
     #[test]
+    fn duplicates_plan_with_launch_config() {
+        let data_dir = tempfile::tempdir().unwrap();
+        write_workspace(data_dir.path());
+        set_plan_enabled(data_dir.path(), "work", false).unwrap();
+        set_plan_launch_trigger(data_dir.path(), "work", LaunchTrigger::AutoOnAppStart).unwrap();
+        add_plan_schedule(
+            data_dir.path(),
+            "work",
+            ScheduleRule::Daily {
+                time: "09:00".to_string(),
+            },
+        )
+        .unwrap();
+
+        let duplicated = duplicate_plan(data_dir.path(), "work").unwrap();
+        let workspace = load_workspace(data_dir.path()).unwrap();
+        let entry = workspace
+            .global
+            .plans
+            .iter()
+            .find(|entry| entry.id == duplicated.id)
+            .unwrap();
+
+        assert_eq!(duplicated.id, "work-2");
+        assert_eq!(duplicated.name, "work 2");
+        assert_eq!(entry.file, "plans/work-2.json");
+        assert!(!entry.enabled);
+        assert_eq!(entry.launch.trigger, LaunchTrigger::AutoOnAppStart);
+        assert_eq!(entry.launch.schedules.len(), 1);
+    }
+
+    #[test]
     fn rejects_duplicate_plan_id_without_writing() {
         let data_dir = tempfile::tempdir().unwrap();
         write_workspace(data_dir.path());
@@ -1673,6 +1914,7 @@ mod tests {
                     value: "cargo test".to_string(),
                     shell: CommandShell::PowerShell,
                     working_dir: Some("D:\\cache\\runMain".to_string()),
+                    background: false,
                 },
                 pre_delay_ms: 1,
                 post_delay_ms: 2,
@@ -1703,6 +1945,68 @@ mod tests {
         assert_eq!(item.name, "Program");
         assert!(matches!(item.target, LaunchTarget::Program { .. }));
         validate_workspace(&load_workspace(data_dir.path()).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn duplicates_root_item_to_plan_bottom() {
+        let data_dir = tempfile::tempdir().unwrap();
+        write_sequence_workspace(data_dir.path());
+
+        let duplicated = duplicate_root_item(data_dir.path(), "work", "notes").unwrap();
+        let plan = load_plan(data_dir.path(), "plans/work.json").unwrap();
+
+        assert_eq!(duplicated.id, "notes-2");
+        assert_eq!(duplicated.name, "Notes 2");
+        let SequenceNode::Item(last) = plan.sequence.last().unwrap() else {
+            panic!("last node should be duplicated item");
+        };
+        assert_eq!(last.id, "notes-2");
+    }
+
+    #[test]
+    fn updates_plan_identity_and_moves_file() {
+        let data_dir = tempfile::tempdir().unwrap();
+        write_workspace(data_dir.path());
+
+        let plan = update_plan_identity(data_dir.path(), "work", "office", "Office").unwrap();
+        let workspace = load_workspace(data_dir.path()).unwrap();
+
+        assert_eq!(plan.id, "office");
+        assert_eq!(plan.name, "Office");
+        assert!(workspace.global.plans.iter().any(|entry| entry.id == "office"));
+        assert!(data_dir.path().join("plans/office.json").exists());
+        assert!(!data_dir.path().join("plans/work.json").exists());
+    }
+
+    #[test]
+    fn replaces_item_and_allows_id_change() {
+        let data_dir = tempfile::tempdir().unwrap();
+        write_sequence_workspace(data_dir.path());
+
+        replace_item(
+            data_dir.path(),
+            "work",
+            "notes",
+            LaunchItem {
+                id: "notes-2".to_string(),
+                name: "Notes 2".to_string(),
+                description: "Updated".to_string(),
+                target: LaunchTarget::Path {
+                    value: "D:\\notes-2.md".to_string(),
+                },
+                pre_delay_ms: 1,
+                post_delay_ms: 2,
+                on_failure: crate::model::FailurePolicy::Continue,
+            },
+        )
+        .unwrap();
+
+        let plan = load_plan(data_dir.path(), "plans/work.json").unwrap();
+        let SequenceNode::Item(item) = &plan.sequence[0] else {
+            panic!("first node should remain item");
+        };
+        assert_eq!(item.id, "notes-2");
+        assert_eq!(item.name, "Notes 2");
     }
 
     #[test]

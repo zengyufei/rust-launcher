@@ -36,6 +36,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-deps-
 
+      - name: Install UPX
+        run: choco install upx
+
       - name: Build
         run: cargo build --workspace --release --locked
 
@@ -53,6 +56,8 @@ jobs:
           New-Item -ItemType Directory -Force $dist | Out-Null
           Copy-Item "target/release/launcher.exe" "$dist/$cli"
           Copy-Item "target/release/launcher-gui.exe" "$dist/$gui"
+          upx --best "$dist/$cli"
+          upx --best "$dist/$gui"
 
           "cli=$dist/$cli" >> $env:GITHUB_OUTPUT
           "gui=$dist/$gui" >> $env:GITHUB_OUTPUT

@@ -15,20 +15,21 @@ export component ItemDialog inherits Rectangle {
     in-out property <string> item-form-args;
     in-out property <string> item-form-working-dir;
     in-out property <string> item-form-shell;
+    in-out property <bool> item-form-background;
     in-out property <string> form-pre-delay-ms;
     in-out property <string> form-post-delay-ms;
     in-out property <string> form-on-failure;
 
     callback close-modal();
     callback item-kind-changed(string);
-    callback save-item(string, string, string, string, string, string, string, string, string, string, string);
+    callback save-item(string, string, string, string, string, string, string, string, bool, string, string, string);
     callback set-failure-policy(string);
     callback set-command-shell(string);
 
     x: (root.surface-width - 580px) / 2;
-    y: (root.surface-height - (root.item-form-kind == "path" ? 600px : 671px)) / 2 + (root.item-form-kind == "path" ? 8px : 10px);
+    y: (root.surface-height - (root.item-form-kind == "path" ? 600px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 742px : 671px))) / 2 + (root.item-form-kind == "path" ? 8px : 10px);
     width: 580px;
-    height: root.item-form-kind == "path" ? 600px : 671px;
+    height: root.item-form-kind == "path" ? 600px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 742px : 671px);
     background: #ffffff;
     border-color: #e2e8f0;
     border-width: 1px;
@@ -68,7 +69,7 @@ export component ItemDialog inherits Rectangle {
         y: 47px;
         width: 490px;
         height: 18px;
-        text: root.item-form-kind == "program" ? "启动可执行程序，可配置参数和工作目录" : (root.item-form-kind == "url" ? "打开网页或协议链接，例如 https、mailto、obsidian 等" : (root.item-form-kind == "command" ? "高级模式：通过命令解释器执行命令，可配置工作目录" : "打开文件、文件夹、图片、音乐等，使用系统默认关联程序"));
+        text: root.item-form-kind == "program" ? "启动可执行程序，可配置参数和工作目录" : (root.item-form-kind == "url" ? "打开网页或协议链接，例如 https、mailto、obsidian 等" : (root.item-form-kind == "command" ? "高级模式：通过命令解释器执行命令，可配置工作目录和后台执行" : "打开文件、文件夹、图片、音乐等，使用系统默认关联程序"));
         text-color: #64748b;
         text-size: 12px;
         vertical-alignment: center;
@@ -77,7 +78,7 @@ export component ItemDialog inherits Rectangle {
     SelectableText { x: 22px; y: 82px; width: 263px; height: 19px; text: "名称"; text-color: #334155; text-size: 13px; text-weight: 700; }
     LineEdit { x: 22px; y: 107px; width: 263px; height: 38px; text <=> root.item-form-name; }
     SelectableText { x: 295px; y: 82px; width: 263px; height: 19px; text: "启动项标识"; text-color: #334155; text-size: 13px; text-weight: 700; }
-    LineEdit { x: 295px; y: 107px; width: 263px; height: 38px; text <=> root.item-form-id; enabled: root.modal-kind == "add-item"; }
+    LineEdit { x: 295px; y: 107px; width: 263px; height: 38px; text <=> root.item-form-id; }
     
     SelectableText { x: 22px; y: 155px; width: 536px; height: 19px; text: "描述"; text-color: #334155; text-size: 13px; text-weight: 700; }
     LineEdit { x: 22px; y: 180px; width: 536px; height: 42px; text <=> root.item-form-description; }
@@ -117,10 +118,10 @@ export component ItemDialog inherits Rectangle {
     }
     LineEdit { x: 22px; y: 324px; width: 536px; height: 38px; text <=> root.item-form-target; }
     
-    if root.item-form-kind == "program": SelectableText { x: 22px; y: 372px; width: 263px; height: 19px; text: "参数（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
-    if root.item-form-kind == "program": LineEdit { x: 22px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-args; }
-    if root.item-form-kind == "program": SelectableText { x: 295px; y: 372px; width: 263px; height: 19px; text: "工作目录（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
-    if root.item-form-kind == "program": LineEdit { x: 295px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-working-dir; }
+    if root.item-form-kind == "program": SelectableText { x: 22px; y: 372px; width: 536px; height: 19px; text: "参数（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    if root.item-form-kind == "program": LineEdit { x: 22px; y: 397px; width: 536px; height: 36px; text <=> root.item-form-args; }
+    if root.item-form-kind == "program": SelectableText { x: 22px; y: 443px; width: 536px; height: 19px; text: "工作目录（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    if root.item-form-kind == "program": LineEdit { x: 22px; y: 468px; width: 536px; height: 36px; text <=> root.item-form-working-dir; }
     
     if root.item-form-kind == "url": SelectableText { x: 22px; y: 372px; width: 263px; height: 19px; text: "打开浏览器"; text-color: #334155; text-size: 13px; text-weight: 700; }
     if root.item-form-kind == "url": LineEdit { x: 22px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-args; }
@@ -139,17 +140,51 @@ export component ItemDialog inherits Rectangle {
             root.set-command-shell(value);
         }
     }
-    if root.item-form-kind == "command": SelectableText { x: 295px; y: 372px; width: 263px; height: 19px; text: "工作目录（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
-    if root.item-form-kind == "command": LineEdit { x: 295px; y: 397px; width: 263px; height: 36px; text <=> root.item-form-working-dir; }
+    if root.item-form-kind == "command": SelectableText { x: 295px; y: 372px; width: 263px; height: 19px; text: "执行方式"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    if root.item-form-kind == "command": Rectangle {
+        x: 295px;
+        y: 397px;
+        width: 263px;
+        height: 36px;
+        background: command-bg-touch.has-hover ? #f8fbff : #ffffff;
+        border-color: root.item-form-background ? #93c5fd : #cbd5e1;
+        border-width: 1px;
+        border-radius: 7px;
+        Rectangle {
+            x: 12px;
+            y: 9px;
+            width: 18px;
+            height: 18px;
+            background: root.item-form-background ? #1d4ed8 : #ffffff;
+            border-color: root.item-form-background ? #1d4ed8 : #94a3b8;
+            border-width: 1px;
+            border-radius: 4px;
+        }
+        SelectableText {
+            x: 42px;
+            y: 8px;
+            width: 204px;
+            height: 20px;
+            text: "后台执行（默认关闭）";
+            text-color: #334155;
+            text-size: 12px;
+            text-weight: 700;
+        }
+        command-bg-touch := TouchArea {
+            clicked => { root.item-form-background = !root.item-form-background; }
+        }
+    }
+    if root.item-form-kind == "command": SelectableText { x: 22px; y: 443px; width: 536px; height: 19px; text: "工作目录（可选）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    if root.item-form-kind == "command": LineEdit { x: 22px; y: 468px; width: 536px; height: 36px; text <=> root.item-form-working-dir; }
     
-    SelectableText { x: 22px; y: root.item-form-kind == "path" ? 372px : 443px; width: 263px; height: 16px; text: "执行前延迟（毫秒）"; text-color: #334155; text-size: 13px; text-weight: 700; }
-    LineEdit { x: 22px; y: root.item-form-kind == "path" ? 394px : 465px; width: 263px; height: 36px; text <=> root.form-pre-delay-ms; }
-    SelectableText { x: 295px; y: root.item-form-kind == "path" ? 372px : 443px; width: 263px; height: 16px; text: "执行后延迟（毫秒）"; text-color: #334155; text-size: 13px; text-weight: 700; }
-    LineEdit { x: 295px; y: root.item-form-kind == "path" ? 394px : 465px; width: 263px; height: 36px; text <=> root.form-post-delay-ms; }
+    SelectableText { x: 22px; y: root.item-form-kind == "path" ? 372px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 514px : 443px); width: 263px; height: 16px; text: "执行前延迟（毫秒）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 22px; y: root.item-form-kind == "path" ? 394px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 536px : 465px); width: 263px; height: 36px; text <=> root.form-pre-delay-ms; }
+    SelectableText { x: 295px; y: root.item-form-kind == "path" ? 372px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 514px : 443px); width: 263px; height: 16px; text: "执行后延迟（毫秒）"; text-color: #334155; text-size: 13px; text-weight: 700; }
+    LineEdit { x: 295px; y: root.item-form-kind == "path" ? 394px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 536px : 465px); width: 263px; height: 36px; text <=> root.form-post-delay-ms; }
     
     SelectableText {
         x: 22px;
-        y: root.item-form-kind == "path" ? 440px : 511px;
+        y: root.item-form-kind == "path" ? 440px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 582px : 511px);
         width: 536px;
         height: 16px;
         text: "失败时处理";
@@ -159,7 +194,7 @@ export component ItemDialog inherits Rectangle {
     }
     for failure-name[index] in ["continue", "stop"]: Rectangle {
         x: 22px + index * 272px;
-        y: root.item-form-kind == "path" ? 463px : 534px;
+        y: root.item-form-kind == "path" ? 463px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 605px : 534px);
         width: 264px;
         height: 36px;
         background: root.form-on-failure == failure-name ? (failure-name == "stop" ? #fff0f0 : #eaf3ff) : (failure-touch.has-hover ? (failure-name == "stop" ? #fff8f8 : #f8fbff) : #ffffff);
@@ -179,10 +214,10 @@ export component ItemDialog inherits Rectangle {
     
     SelectableText {
         x: 22px;
-        y: root.item-form-kind == "path" ? 513px : 584px;
+        y: root.item-form-kind == "path" ? 513px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 655px : 584px);
         width: 536px;
-        height: 17px;
-        text: root.modal-error == "" ? (root.item-form-kind == "program" ? "程序类型会直接启动可执行文件；参数和工作目录为可选项。" : (root.item-form-kind == "url" ? "链接类型可指定首选浏览器；打开失败时再尝试备用浏览器。" : (root.item-form-kind == "command" ? "命令类型会显式通过命令解释器执行；适合高级用户或脚本启动。" : "路径类型只需要填写目标路径；保存后会写入当前方案 JSON。"))) : root.modal-error;
+        height: root.item-form-kind == "command" ? 34px : 17px;
+        text: root.modal-error == "" ? (root.item-form-kind == "program" ? "程序类型会直接启动可执行文件；参数和工作目录为可选项。" : (root.item-form-kind == "url" ? "链接类型可指定首选浏览器；打开失败时再尝试备用浏览器。" : (root.item-form-kind == "command" ? "命令类型默认以前台新窗口执行；勾选“后台执行”后会隐藏窗口，仅保留进程。" : "路径类型只需要填写目标路径；保存后会写入当前方案 JSON。"))) : root.modal-error;
         text-color: root.modal-error == "" ? #64748b : #be123c;
         text-size: 12px;
         wrap: word-wrap;
@@ -191,19 +226,19 @@ export component ItemDialog inherits Rectangle {
     
     DialogButton {
         x: 350px;
-        y: root.item-form-kind == "path" ? 544px : 615px;
+        y: root.item-form-kind == "path" ? 544px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 686px : 615px);
         text: "取消";
         clicked => { root.close-modal(); }
     }
     DialogButton {
         x: 446px;
-        y: root.item-form-kind == "path" ? 544px : 615px;
+        y: root.item-form-kind == "path" ? 544px : ((root.item-form-kind == "program" || root.item-form-kind == "command") ? 686px : 615px);
         text: root.modal-kind == "add-item" ? "创建启动项" : "保存启动项";
         primary: true;
         width: 112px;
         enabled: !root.running && root.item-form-id != "" && root.item-form-name != "" && root.item-form-target != "";
         clicked => {
-            root.save-item(root.item-form-id, root.item-form-name, root.item-form-description, root.item-form-kind, root.item-form-target, root.item-form-args, root.item-form-working-dir, root.item-form-shell, root.form-pre-delay-ms, root.form-post-delay-ms, root.form-on-failure);
+            root.save-item(root.item-form-id, root.item-form-name, root.item-form-description, root.item-form-kind, root.item-form-target, root.item-form-args, root.item-form-working-dir, root.item-form-shell, root.item-form-background, root.form-pre-delay-ms, root.form-post-delay-ms, root.form-on-failure);
         }
     }
 }

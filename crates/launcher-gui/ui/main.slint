@@ -27,6 +27,7 @@ export component AppWindow inherits Window {
     in property <[PlanRow]> plan-rows;
     in property <[SequenceRow]> sequence-rows;
     in property <bool> has-selection;
+    in property <bool> can-copy-selection;
     in property <string> selection-summary;
     in property <[InspectorRow]> launch-rows;
     in property <bool> schedule-visible;
@@ -48,6 +49,7 @@ export component AppWindow inherits Window {
     in-out property <string> create-plan-id;
     in-out property <string> create-plan-file;
     in-out property <string> rename-plan-name;
+    in-out property <string> rename-plan-id;
     in-out property <string> search-query;
     in-out property <string> item-form-kind;
     in-out property <string> item-form-id;
@@ -57,6 +59,7 @@ export component AppWindow inherits Window {
     in-out property <string> item-form-args;
     in-out property <string> item-form-working-dir;
     in-out property <string> item-form-shell;
+    in-out property <bool> item-form-background;
     in-out property <string> group-form-id;
     in-out property <string> group-form-name;
     in-out property <string> group-form-description;
@@ -81,13 +84,13 @@ export component AppWindow inherits Window {
     callback plan-menu-action(string, string);
     callback close-modal();
     callback create-plan(string, string, string);
-    callback rename-plan(string, string);
+    callback rename-plan(string, string, string);
     callback delete-plan(string);
     callback confirm-import-overwrite();
     callback open-add-item();
     callback open-edit-node(string);
     callback item-kind-changed(string);
-    callback save-item(string, string, string, string, string, string, string, string, string, string, string);
+    callback save-item(string, string, string, string, string, string, string, string, bool, string, string, string);
     callback save-group(string, string, string, string, string, string);
     callback set-failure-policy(string);
     callback set-command-shell(string);
@@ -188,6 +191,7 @@ export component AppWindow inherits Window {
                 selected-plan-title: root.selected-plan-title;
                 selected-plan-file: root.selected-plan-file;
                 has-selection: root.has-selection;
+                can-copy-selection: root.can-copy-selection;
                 selection-summary: root.selection-summary;
                 sequence-rows: root.sequence-rows;
                 open-add-item => { root.open-add-item(); }
@@ -239,6 +243,7 @@ export component AppWindow inherits Window {
         create-plan-id <=> root.create-plan-id;
         create-plan-file <=> root.create-plan-file;
         rename-plan-name <=> root.rename-plan-name;
+        rename-plan-id <=> root.rename-plan-id;
         item-form-kind <=> root.item-form-kind;
         item-form-id <=> root.item-form-id;
         item-form-name <=> root.item-form-name;
@@ -247,6 +252,7 @@ export component AppWindow inherits Window {
         item-form-args <=> root.item-form-args;
         item-form-working-dir <=> root.item-form-working-dir;
         item-form-shell <=> root.item-form-shell;
+        item-form-background <=> root.item-form-background;
         group-form-id <=> root.group-form-id;
         group-form-name <=> root.group-form-name;
         group-form-description <=> root.group-form-description;
@@ -260,11 +266,11 @@ export component AppWindow inherits Window {
         schedule-form-at <=> root.schedule-form-at;
         close-modal => { root.close-modal(); }
         create-plan(name, id, file) => { root.create-plan(name, id, file); }
-        rename-plan(id, name) => { root.rename-plan(id, name); }
+        rename-plan(id, new-id, name) => { root.rename-plan(id, new-id, name); }
         delete-plan(id) => { root.delete-plan(id); }
         confirm-import-overwrite => { root.confirm-import-overwrite(); }
         item-kind-changed(kind) => { root.item-kind-changed(kind); }
-        save-item(id, name, description, kind, target, args, working-dir, shell, pre-delay, post-delay, on-failure) => { root.save-item(id, name, description, kind, target, args, working-dir, shell, pre-delay, post-delay, on-failure); }
+        save-item(id, name, description, kind, target, args, working-dir, shell, background, pre-delay, post-delay, on-failure) => { root.save-item(id, name, description, kind, target, args, working-dir, shell, background, pre-delay, post-delay, on-failure); }
         save-group(id, name, description, pre-delay, post-delay, on-failure) => { root.save-group(id, name, description, pre-delay, post-delay, on-failure); }
         set-failure-policy(policy) => { root.set-failure-policy(policy); }
         set-command-shell(shell) => { root.set-command-shell(shell); }

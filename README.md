@@ -99,10 +99,19 @@ CLI 可以用全局参数覆盖数据目录：
 
 ```powershell
 cargo build --workspace
+cargo build --workspace --release
+
+# 发布版产物：
+# .\target\release\launcher.exe
+# .\target\release\launcher-gui.exe
 
 .\target\debug\launcher.exe --data-dir .\data validate
 .\target\debug\launcher.exe --data-dir .\data list
 .\target\debug\launcher.exe --data-dir .\data run demo --dry-run
+
+# 直接运行导出的单个方案 JSON，无需 data 目录或 global.json：
+.\target\debug\launcher.exe run .\huizhou.json --dry-run
+.\target\debug\launcher.exe validate .\huizhou.json
 
 .\target\debug\launcher-gui.exe
 ```
@@ -139,9 +148,9 @@ GUI 当前覆盖的重点能力：
 #### 顶层命令
 
 ```text
-launcher validate
+launcher validate [PLAN_JSON_PATH]
 launcher list
-launcher run <PLAN_ID> [--dry-run]
+launcher run <PLAN_ID|PLAN_JSON_PATH> [--dry-run]
 launcher run-item <PLAN_ID> <ITEM_ID> [--dry-run]
 launcher daemon
 launcher new-plan <ID> <NAME>
@@ -151,6 +160,14 @@ launcher schedule <SUBCOMMAND>
 launcher sequence <SUBCOMMAND>
 launcher group <SUBCOMMAND>
 launcher item <SUBCOMMAND>
+```
+
+导出的方案 JSON 也可以直接被 CLI 执行或校验，不需要先导入工作区：
+
+```powershell
+launcher run .\huizhou.json
+launcher run .\huizhou.json --dry-run
+launcher validate .\huizhou.json
 ```
 
 #### 方案管理
@@ -396,10 +413,19 @@ Override the CLI data directory with:
 
 ```powershell
 cargo build --workspace
+cargo build --workspace --release
+
+# Release binaries:
+# .\target\release\launcher.exe
+# .\target\release\launcher-gui.exe
 
 .\target\debug\launcher.exe --data-dir .\data validate
 .\target\debug\launcher.exe --data-dir .\data list
 .\target\debug\launcher.exe --data-dir .\data run demo --dry-run
+
+# Run an exported plan JSON directly, without data/ or global.json:
+.\target\debug\launcher.exe run .\huizhou.json --dry-run
+.\target\debug\launcher.exe validate .\huizhou.json
 
 .\target\debug\launcher-gui.exe
 ```
@@ -436,9 +462,9 @@ All commands accept the global option before the subcommand:
 #### Top-Level Commands
 
 ```text
-launcher validate
+launcher validate [PLAN_JSON_PATH]
 launcher list
-launcher run <PLAN_ID> [--dry-run]
+launcher run <PLAN_ID|PLAN_JSON_PATH> [--dry-run]
 launcher run-item <PLAN_ID> <ITEM_ID> [--dry-run]
 launcher daemon
 launcher new-plan <ID> <NAME>
@@ -448,6 +474,14 @@ launcher schedule <SUBCOMMAND>
 launcher sequence <SUBCOMMAND>
 launcher group <SUBCOMMAND>
 launcher item <SUBCOMMAND>
+```
+
+Exported plan JSON files can also be validated or run directly without importing them into a workspace:
+
+```powershell
+launcher run .\huizhou.json
+launcher run .\huizhou.json --dry-run
+launcher validate .\huizhou.json
 ```
 
 #### Plan Commands

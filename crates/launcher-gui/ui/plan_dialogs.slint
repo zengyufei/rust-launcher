@@ -123,14 +123,15 @@ export component RenamePlanDialog inherits Rectangle {
     in property <string> modal-plan-file;
     in property <string> modal-error;
     in-out property <string> rename-plan-name;
+    in-out property <string> rename-plan-id;
 
     callback close-modal();
-    callback rename-plan(string, string);
+    callback rename-plan(string, string, string);
 
     x: (root.surface-width - 440px) / 2;
-    y: (root.surface-height - 380px) / 2;
+    y: (root.surface-height - 430px) / 2;
     width: 440px;
-    height: 380px;
+    height: 430px;
     background: #ffffff;
     border-color: #e2e8f0;
     border-width: 1px;
@@ -168,7 +169,7 @@ export component RenamePlanDialog inherits Rectangle {
         y: 49px;
         width: 336px;
         height: 18px;
-        text: "只修改方案名称，标识和文件路径只读";
+        text: "可修改方案名称和标识；文件路径会随标识自动更新";
         text-color: #64748b;
         text-size: 12px;
         vertical-alignment: center;
@@ -191,10 +192,27 @@ export component RenamePlanDialog inherits Rectangle {
         height: 38px;
         text <=> root.rename-plan-name;
     }
+    SelectableText {
+        x: 22px;
+        y: 182px;
+        width: 396px;
+        height: 18px;
+        text: "方案标识";
+        text-color: #334155;
+        text-size: 13px;
+        text-weight: 700;
+    }
+    LineEdit {
+        x: 22px;
+        y: 208px;
+        width: 396px;
+        height: 38px;
+        text <=> root.rename-plan-id;
+    }
     
     Rectangle {
         x: 22px;
-        y: 188px;
+        y: 268px;
         width: 396px;
         height: 74px;
         background: #f8fafc;
@@ -206,7 +224,7 @@ export component RenamePlanDialog inherits Rectangle {
             y: 11px;
             width: 372px;
             height: 18px;
-            text: "方案 id: " + root.modal-plan-id;
+            text: "当前方案 id: " + root.modal-plan-id;
             text-color: #475569;
             text-size: 12px;
             text-weight: 600;
@@ -217,7 +235,7 @@ export component RenamePlanDialog inherits Rectangle {
             y: 42px;
             width: 372px;
             height: 18px;
-            text: "方案文件: " + root.modal-plan-file;
+            text: "方案文件: plans/" + root.rename-plan-id + ".json";
             text-color: #475569;
             text-size: 12px;
             text-weight: 600;
@@ -227,10 +245,10 @@ export component RenamePlanDialog inherits Rectangle {
     
     SelectableText {
         x: 22px;
-        y: 282px;
+        y: 360px;
         width: 396px;
         height: 36px;
-        text: root.modal-error == "" ? "已有方案只允许修改显示名称；方案 id 和 JSON 文件路径会作为稳定标识保持锁定。" : root.modal-error;
+        text: root.modal-error == "" ? "保存时会同步更新 global.json、方案 JSON 内的 id，并把文件迁移为 plans/<id>.json。" : root.modal-error;
         text-color: root.modal-error == "" ? #64748b : #be123c;
         text-size: 12px;
         wrap: word-wrap;
@@ -239,17 +257,17 @@ export component RenamePlanDialog inherits Rectangle {
     
     DialogButton {
         x: 218px;
-        y: 324px;
+        y: 380px;
         text: "取消";
         clicked => { root.close-modal(); }
     }
     DialogButton {
         x: 314px;
-        y: 324px;
+        y: 380px;
         text: "保存修改";
         primary: true;
-        enabled: !root.running && root.rename-plan-name != "";
-        clicked => { root.rename-plan(root.modal-plan-id, root.rename-plan-name); }
+        enabled: !root.running && root.rename-plan-name != "" && root.rename-plan-id != "";
+        clicked => { root.rename-plan(root.modal-plan-id, root.rename-plan-id, root.rename-plan-name); }
     }
 }
 

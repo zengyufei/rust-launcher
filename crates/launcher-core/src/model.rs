@@ -278,6 +278,8 @@ pub enum LaunchTarget {
         shell: CommandShell,
         #[serde(default)]
         working_dir: Option<String>,
+        #[serde(default)]
+        background: bool,
     },
 }
 
@@ -292,8 +294,14 @@ impl LaunchTarget {
                 format!("program: {value} {}", args.join(" "))
             }
             LaunchTarget::Url { value } => format!("url: {value}"),
-            LaunchTarget::Command { value, shell, .. } => {
-                format!("command({shell:?}): {value}")
+            LaunchTarget::Command {
+                value,
+                shell,
+                background,
+                ..
+            } => {
+                let mode = if *background { "bg" } else { "fg" };
+                format!("command({shell:?},{mode}): {value}")
             }
         }
     }
@@ -379,7 +387,8 @@ mod tests {
                 "kind": "command",
                 "value": "npm run dev",
                 "shell": "power_shell",
-                "working_dir": "D:\\cache\\runMain"
+                "working_dir": "D:\\cache\\runMain",
+                "background": true
               }
             }"#,
         )
@@ -389,6 +398,7 @@ mod tests {
             item.target,
             LaunchTarget::Command {
                 shell: CommandShell::PowerShell,
+                background: true,
                 ..
             }
         ));

@@ -10,13 +10,14 @@ use std::{
 
 use launcher_core::{
     add_item, add_plan_schedule, combine_root_items, create_plan_with_file, default_data_dir,
-    delete_group, delete_item, delete_plan, delete_plan_schedule, execute_plan_with_progress,
-    export_plan, import_plan, load_workspace, move_plan, move_sequence_node, rename_plan,
-    set_plan_enabled, set_plan_launch_trigger, ungroup, update_group, update_item,
-    update_plan_schedule, validate_workspace, ExecuteOptions, ExecutionReport, FailurePolicy,
-    Group, GroupUpdate, ItemExecution, ItemUpdate, LaunchItem, LaunchTarget, LaunchTrigger,
-    LauncherError, NodeMoveDirection, Plan, PlanCatalogEntry, PlanMoveDirection, ScheduleRule,
-    Scheduler, SequenceNode, Weekday, Workspace,
+    delete_group, delete_item, delete_plan, delete_plan_schedule, duplicate_plan,
+    duplicate_root_item, execute_plan_with_progress, export_plan, import_plan, load_workspace,
+    move_plan, move_sequence_node, replace_item, set_plan_enabled, set_plan_launch_trigger,
+    ungroup, update_group, update_item, update_plan_identity, update_plan_schedule,
+    validate_workspace, ExecuteOptions, ExecutionReport, FailurePolicy, Group, GroupUpdate,
+    ItemExecution, ItemUpdate, LaunchItem, LaunchTarget, LaunchTrigger, LauncherError,
+    NodeMoveDirection, Plan, PlanCatalogEntry, PlanMoveDirection, ScheduleRule, Scheduler,
+    SequenceNode, Weekday, Workspace,
 };
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
@@ -265,15 +266,15 @@ fn main() -> Result<()> {
 
     let weak = app.as_weak();
     let state_for_rename = Arc::clone(&state);
-    app.on_rename_plan(move |plan_id, name| {
+    app.on_rename_plan(move |plan_id, new_id, name| {
         if let Some(app) = weak.upgrade() {
             mutate_plan_from_modal(&app, &state_for_rename, |state| {
                 let data_dir = default_data_dir();
-                rename_plan(&data_dir, &plan_id, &name)?;
-                state.selected_plan_id = Some(plan_id.to_string());
+                let plan = update_plan_identity(&data_dir, &plan_id, &new_id, &name)?;
+                state.selected_plan_id = Some(plan.id.clone());
                 state.logs.push(log_row(
                     "info",
-                    format!("已重命名方案: {plan_id} -> {name}"),
+                    format!("已更新方案: {plan_id} -> {} ({})", plan.id, plan.name),
                 ));
                 Ok(())
             });
@@ -339,7 +340,7 @@ fn main() -> Result<()> {
     let weak = app.as_weak();
     let state_for_save_item = Arc::clone(&state);
     app.on_save_item(
-        move |id, name, description, kind, target, args, working_dir, shell, pre, post, failure| {
+        move |id, name, description, kind, target, args, working_dir, shell, background, pre, post, failure| {
             if let Some(app) = weak.upgrade() {
                 save_item_from_modal(
                     &app,
@@ -353,6 +354,7 @@ fn main() -> Result<()> {
                         args: args.to_string(),
                         working_dir: working_dir.to_string(),
                         shell: shell.to_string(),
+                        background,
                         pre_delay_ms: pre.to_string(),
                         post_delay_ms: post.to_string(),
                         on_failure: failure.to_string(),
@@ -513,6 +515,7 @@ fn handle_plan_menu_action(
                 state.modal_error = None;
             }
             app.set_rename_plan_name(name.into());
+            app.set_rename_plan_id(plan_id.clone());
             render(app, state);
         }
         "删除方案" => {
@@ -527,6 +530,7 @@ fn handle_plan_menu_action(
             render(app, state);
         }
         "导出方案" => export_plan_from_menu(app, state, plan_id),
+        "复制方案" => duplicate_plan_from_menu(app, state, plan_id),
         "置顶" => mutate_plan_direct(app, state, plan_id, "置顶", |data_dir, id| {
             move_plan(data_dir, id, PlanMoveDirection::Top)
         }),
@@ -694,6 +698,38 @@ fn export_plan_from_menu(app: &AppWindow, state: &Arc<Mutex<GuiState>>, plan_id:
             format!("已导出方案: {plan_id} -> {}", path.display()),
         ),
         Err(error) => append_log(state, "error", format!("导出方案失败: {error}")),
+    }
+    render(app, state);
+}
+
+fn duplicate_plan_from_menu(app: &AppWindow, state: &Arc<Mutex<GuiState>>, plan_id: &SharedString) {
+    {
+        let mut guard = state.lock().expect("GUI state lock poisoned");
+        guard.context_plan_id = None;
+        if guard.running {
+            guard
+                .logs
+                .push(log_row("error", "复制方案失败: 方案运行中，暂不能编辑。"));
+            drop(guard);
+            render(app, state);
+            return;
+        }
+    }
+
+    match duplicate_plan(&default_data_dir(), plan_id) {
+        Ok(plan) => {
+            {
+                let mut guard = state.lock().expect("GUI state lock poisoned");
+                guard.selected_plan_id = Some(plan.id.clone());
+                guard.selected_node_ids.clear();
+                guard.logs.push(log_row(
+                    "info",
+                    format!("已复制方案: {plan_id} -> {}", plan.id),
+                ));
+            }
+            load_workspace_into_state(state);
+        }
+        Err(error) => append_log(state, "error", format!("复制方案失败: {error}")),
     }
     render(app, state);
 }
@@ -954,6 +990,7 @@ struct ItemFormInput {
     args: String,
     working_dir: String,
     shell: String,
+    background: bool,
     pre_delay_ms: String,
     post_delay_ms: String,
     on_failure: String,
@@ -1019,6 +1056,7 @@ fn open_add_item_modal(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
             args: String::new(),
             working_dir: String::new(),
             shell: "PowerShell".to_string(),
+            background: false,
             pre_delay_ms: "0".to_string(),
             post_delay_ms: "0".to_string(),
             on_failure: "continue".to_string(),
@@ -1130,23 +1168,36 @@ fn save_item_from_modal(app: &AppWindow, state: &Arc<Mutex<GuiState>>, input: It
                 let item_id = guard.modal_node_id.clone().ok_or_else(|| {
                     launcher_core::LauncherError::Validation("缺少启动项标识".to_string())
                 })?;
-                update_item(
-                    &data_dir,
-                    &plan_id,
-                    &item_id,
-                    ItemUpdate {
-                        name: Some(input.name.clone()),
-                        description: Some(input.description.clone()),
-                        pre_delay_ms: Some(pre_delay_ms),
-                        post_delay_ms: Some(post_delay_ms),
-                        on_failure: Some(on_failure),
-                        target: Some(target),
-                    },
-                )?;
-                guard.selected_node_ids = vec![item_id.clone()];
+                let replacement = LaunchItem {
+                    id: input.id.clone(),
+                    name: input.name.clone(),
+                    description: input.description.clone(),
+                    target,
+                    pre_delay_ms,
+                    post_delay_ms,
+                    on_failure,
+                };
+                if item_id == input.id {
+                    update_item(
+                        &data_dir,
+                        &plan_id,
+                        &item_id,
+                        ItemUpdate {
+                            name: Some(input.name.clone()),
+                            description: Some(input.description.clone()),
+                            pre_delay_ms: Some(pre_delay_ms),
+                            post_delay_ms: Some(post_delay_ms),
+                            on_failure: Some(on_failure),
+                            target: Some(replacement.target.clone()),
+                        },
+                    )?;
+                } else {
+                    replace_item(&data_dir, &plan_id, &item_id, replacement)?;
+                }
+                guard.selected_node_ids = vec![input.id.clone()];
                 guard
                     .logs
-                    .push(log_row("info", format!("已编辑启动项: {item_id}")));
+                    .push(log_row("info", format!("已编辑启动项: {item_id} -> {}", input.id)));
             }
             _ => {
                 return Err(launcher_core::LauncherError::Validation(
@@ -1231,6 +1282,15 @@ fn handle_bulk_action(app: &AppWindow, state: &Arc<Mutex<GuiState>>, action: &Sh
         let data_dir = default_data_dir();
         let selected_ids = selected_root_ids_in_plan_order(guard)?;
         match action.as_str() {
+            "复制" => {
+                let item_id = selected_single_root_item_id(guard)?;
+                let item = duplicate_root_item(&data_dir, &plan_id, &item_id)?;
+                guard.selected_node_ids = vec![item.id.clone()];
+                guard.logs.push(log_row(
+                    "info",
+                    format!("已复制启动项: {item_id} -> {}", item.id),
+                ));
+            }
             "删除" => {
                 for node_id in &selected_ids {
                     match root_node_kind(guard, node_id)? {
@@ -1547,6 +1607,26 @@ fn selected_root_ids_in_plan_order(state: &GuiState) -> launcher_core::Result<Ve
     Ok(ids)
 }
 
+fn selected_single_root_item_id(state: &GuiState) -> launcher_core::Result<String> {
+    let ids = selected_root_ids_in_plan_order(state)?;
+    if ids.len() != 1 {
+        return Err(launcher_core::LauncherError::Validation(
+            "复制只支持单个根层级启动项".to_string(),
+        ));
+    }
+    let item_id = ids[0].clone();
+    if root_node_kind(state, &item_id)? != "item" {
+        return Err(launcher_core::LauncherError::Validation(
+            "复制只支持单个根层级启动项".to_string(),
+        ));
+    }
+    Ok(item_id)
+}
+
+fn can_copy_selection(state: &GuiState) -> bool {
+    selected_single_root_item_id(state).is_ok()
+}
+
 fn root_node_kind<'a>(state: &'a GuiState, node_id: &str) -> launcher_core::Result<&'a str> {
     let workspace = state.workspace.as_ref().ok_or_else(|| {
         launcher_core::LauncherError::Validation("没有已加载的工作区".to_string())
@@ -1684,6 +1764,7 @@ fn build_target(input: &ItemFormInput) -> launcher_core::Result<LaunchTarget> {
             value,
             shell: shell_from_text(&input.shell)?,
             working_dir,
+            background: input.background,
         }),
         _ => Err(launcher_core::LauncherError::Validation(format!(
             "未知目标类型: {}",
@@ -1710,13 +1791,14 @@ fn parse_args(value: &str) -> Vec<String> {
 }
 
 fn set_item_form_from_item(app: &AppWindow, item: &LaunchItem) {
-    let (kind, target, args, working_dir, shell) = match &item.target {
+    let (kind, target, args, working_dir, shell, background) = match &item.target {
         LaunchTarget::Path { value } => (
             "path",
             value.clone(),
             String::new(),
             String::new(),
             "PowerShell",
+            false,
         ),
         LaunchTarget::Program {
             value,
@@ -1728,6 +1810,7 @@ fn set_item_form_from_item(app: &AppWindow, item: &LaunchItem) {
             args.join(" "),
             working_dir.clone().unwrap_or_default(),
             "PowerShell",
+            false,
         ),
         LaunchTarget::Url { value } => (
             "url",
@@ -1735,17 +1818,20 @@ fn set_item_form_from_item(app: &AppWindow, item: &LaunchItem) {
             String::new(),
             String::new(),
             "PowerShell",
+            false,
         ),
         LaunchTarget::Command {
             value,
             shell,
             working_dir,
+            background,
         } => (
             "command",
             value.clone(),
             String::new(),
             working_dir.clone().unwrap_or_default(),
             shell_text(*shell),
+            *background,
         ),
     };
     set_item_form(
@@ -1759,6 +1845,7 @@ fn set_item_form_from_item(app: &AppWindow, item: &LaunchItem) {
             args,
             working_dir,
             shell: shell.to_string(),
+            background,
             pre_delay_ms: item.pre_delay_ms.to_string(),
             post_delay_ms: item.post_delay_ms.to_string(),
             on_failure: failure_text(item.on_failure),
@@ -1775,6 +1862,7 @@ fn set_item_form(app: &AppWindow, input: &ItemFormInput) {
     app.set_item_form_args(input.args.as_str().into());
     app.set_item_form_working_dir(input.working_dir.as_str().into());
     app.set_item_form_shell(input.shell.as_str().into());
+    app.set_item_form_background(input.background);
     app.set_form_pre_delay_ms(input.pre_delay_ms.as_str().into());
     app.set_form_post_delay_ms(input.post_delay_ms.as_str().into());
     app.set_form_on_failure(input.on_failure.as_str().into());
@@ -2046,6 +2134,7 @@ fn render(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
         &state.selected_node_ids,
     )));
     app.set_has_selection(!state.selected_node_ids.is_empty());
+    app.set_can_copy_selection(can_copy_selection(&state));
     app.set_selection_summary(selection_summary(&state.selected_node_ids));
     app.set_launch_rows(model_from(launch_rows(selected_entry)));
     app.set_schedule_visible(

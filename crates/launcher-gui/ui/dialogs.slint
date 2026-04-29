@@ -19,6 +19,7 @@ export component ModalLayer inherits Rectangle {
     in-out property <string> create-plan-id;
     in-out property <string> create-plan-file;
     in-out property <string> rename-plan-name;
+    in-out property <string> rename-plan-id;
     in-out property <string> item-form-kind;
     in-out property <string> item-form-id;
     in-out property <string> item-form-name;
@@ -27,6 +28,7 @@ export component ModalLayer inherits Rectangle {
     in-out property <string> item-form-args;
     in-out property <string> item-form-working-dir;
     in-out property <string> item-form-shell;
+    in-out property <bool> item-form-background;
     in-out property <string> group-form-id;
     in-out property <string> group-form-name;
     in-out property <string> group-form-description;
@@ -41,11 +43,11 @@ export component ModalLayer inherits Rectangle {
 
     callback close-modal();
     callback create-plan(string, string, string);
-    callback rename-plan(string, string);
+    callback rename-plan(string, string, string);
     callback delete-plan(string);
     callback confirm-import-overwrite();
     callback item-kind-changed(string);
-    callback save-item(string, string, string, string, string, string, string, string, string, string, string);
+    callback save-item(string, string, string, string, string, string, string, string, bool, string, string, string);
     callback save-group(string, string, string, string, string, string);
     callback set-failure-policy(string);
     callback set-command-shell(string);
@@ -82,8 +84,9 @@ export component ModalLayer inherits Rectangle {
         modal-plan-file: root.modal-plan-file;
         modal-error: root.modal-error;
         rename-plan-name <=> root.rename-plan-name;
+        rename-plan-id <=> root.rename-plan-id;
         close-modal => { root.close-modal(); }
-        rename-plan(plan-id, name) => { root.rename-plan(plan-id, name); }
+        rename-plan(plan-id, new-id, name) => { root.rename-plan(plan-id, new-id, name); }
     }
 
     if root.modal-kind == "delete": DeletePlanDialog {
@@ -125,13 +128,14 @@ export component ModalLayer inherits Rectangle {
         item-form-args <=> root.item-form-args;
         item-form-working-dir <=> root.item-form-working-dir;
         item-form-shell <=> root.item-form-shell;
+        item-form-background <=> root.item-form-background;
         form-pre-delay-ms <=> root.form-pre-delay-ms;
         form-post-delay-ms <=> root.form-post-delay-ms;
         form-on-failure <=> root.form-on-failure;
         close-modal => { root.close-modal(); }
         item-kind-changed(kind) => { root.item-kind-changed(kind); }
-        save-item(id, name, description, kind, target, args, working-dir, shell, pre-delay, post-delay, on-failure) => {
-            root.save-item(id, name, description, kind, target, args, working-dir, shell, pre-delay, post-delay, on-failure);
+        save-item(id, name, description, kind, target, args, working-dir, shell, background, pre-delay, post-delay, on-failure) => {
+            root.save-item(id, name, description, kind, target, args, working-dir, shell, background, pre-delay, post-delay, on-failure);
         }
         set-failure-policy(policy) => { root.set-failure-policy(policy); }
         set-command-shell(shell) => { root.set-command-shell(shell); }

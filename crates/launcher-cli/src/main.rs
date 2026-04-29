@@ -1,4 +1,5 @@
 use std::{
+    fs,
     path::{Path, PathBuf},
     thread,
     time::Duration,
@@ -31,10 +32,12 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    Validate,
+    Validate {
+        plan: Option<String>,
+    },
     List,
     Run {
-        plan_id: String,
+        target: String,
         #[arg(long)]
         dry_run: bool,
     },
@@ -235,6 +238,8 @@ enum ItemCommand {
         shell: CliShell,
         #[arg(long)]
         working_dir: Option<String>,
+        #[arg(long)]
+        background: bool,
         #[command(flatten)]
         options: ItemOptions,
     },
@@ -283,6 +288,8 @@ enum ItemCommand {
         shell: CliShell,
         #[arg(long)]
         working_dir: Option<String>,
+        #[arg(long)]
+        background: bool,
     },
     Move {
         plan_id: String,
@@ -433,20 +440,24 @@ fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
-    let data_dir = cli.data_dir.unwrap_or_else(default_data_dir);
 
     match cli.command {
-        Command::Validate => {
-            let workspace = load_workspace(&data_dir)?;
-            validate_workspace(&workspace)?;
-            println!("OK: {}", workspace.data_dir.display());
+        Command::Validate { plan } => {
+            if let Some(plan) = plan {
+                let plan_path = PathBuf::from(&plan);
+                let plan = load_standalone_plan(&plan_path)?;
+                println!("OK: {} ({})", plan.name, plan_path.display());
+            } else {
+                let data_dir = resolve_data_dir(cli.data_dir.as_ref());
+                let workspace = load_workspace(&data_dir)?;
+                validate_workspace(&workspace)?;
+                println!("OK: {}", workspace.data_dir.display());
+            }
         }
-        Command::List => list_plans(&data_dir)?,
-        Command::Run { plan_id, dry_run } => {
-            let workspace = load_workspace(&data_dir)?;
-            validate_workspace(&workspace)?;
-            let plan = find_plan(&workspace.plans, &plan_id)?;
-            let report = execute_plan_with_progress(plan, ExecuteOptions { dry_run }, |item| {
+        Command::List => list_plans(&resolve_data_dir(cli.data_dir.as_ref()))?,
+        Command::Run { target, dry_run } => {
+            let plan = load_run_target(cli.data_dir.as_ref(), &target)?;
+            let report = execute_plan_with_progress(&plan, ExecuteOptions { dry_run }, |item| {
                 print_item_execution(item)
             });
             print_report_summary(&report);
@@ -456,6 +467,7 @@ fn main() -> Result<()> {
             item_id,
             dry_run,
         } => {
+            let data_dir = resolve_data_dir(cli.data_dir.as_ref());
             let workspace = load_workspace(&data_dir)?;
             validate_workspace(&workspace)?;
             let plan = find_plan(&workspace.plans, &plan_id)?;
@@ -467,20 +479,25 @@ fn main() -> Result<()> {
             )?;
             print_report_summary(&report);
         }
-        Command::Daemon => run_daemon(&data_dir)?,
+        Command::Daemon => run_daemon(&resolve_data_dir(cli.data_dir.as_ref()))?,
         Command::NewPlan { id, name } => {
+            let data_dir = resolve_data_dir(cli.data_dir.as_ref());
             let plan = create_plan(&data_dir, &id, &name)?;
             println!("created plan {} ({})", plan.id, plan.name);
         }
-        Command::Plan { command } => run_plan_command(&data_dir, command)?,
-        Command::Launch { command } => run_launch_command(&data_dir, command)?,
-        Command::Schedule { command } => run_schedule_command(&data_dir, command)?,
-        Command::Sequence { command } => run_sequence_command(&data_dir, command)?,
-        Command::Group { command } => run_group_command(&data_dir, command)?,
-        Command::Item { command } => run_item_command(&data_dir, command)?,
+        Command::Plan { command } => run_plan_command(&resolve_data_dir(cli.data_dir.as_ref()), command)?,
+        Command::Launch { command } => run_launch_command(&resolve_data_dir(cli.data_dir.as_ref()), command)?,
+        Command::Schedule { command } => run_schedule_command(&resolve_data_dir(cli.data_dir.as_ref()), command)?,
+        Command::Sequence { command } => run_sequence_command(&resolve_data_dir(cli.data_dir.as_ref()), command)?,
+        Command::Group { command } => run_group_command(&resolve_data_dir(cli.data_dir.as_ref()), command)?,
+        Command::Item { command } => run_item_command(&resolve_data_dir(cli.data_dir.as_ref()), command)?,
     }
 
     Ok(())
+}
+
+fn resolve_data_dir(data_dir: Option<&PathBuf>) -> PathBuf {
+    data_dir.cloned().unwrap_or_else(default_data_dir)
 }
 
 fn run_plan_command(data_dir: &Path, command: PlanCommand) -> Result<()> {
@@ -740,6 +757,7 @@ fn run_item_command(data_dir: &Path, command: ItemCommand) -> Result<()> {
             value,
             shell,
             working_dir,
+            background,
             options,
         } => add_item(
             data_dir,
@@ -752,6 +770,7 @@ fn run_item_command(data_dir: &Path, command: ItemCommand) -> Result<()> {
                     value,
                     shell: shell.into(),
                     working_dir,
+                    background,
                 },
                 options.node,
             ),
@@ -818,6 +837,7 @@ fn run_item_command(data_dir: &Path, command: ItemCommand) -> Result<()> {
             value,
             shell,
             working_dir,
+            background,
         } => set_item_target(
             data_dir,
             &plan_id,
@@ -826,6 +846,7 @@ fn run_item_command(data_dir: &Path, command: ItemCommand) -> Result<()> {
                 value,
                 shell: shell.into(),
                 working_dir,
+                background,
             },
         ),
         ItemCommand::Move {
@@ -937,7 +958,7 @@ fn run_daemon(data_dir: &Path) -> Result<()> {
 }
 
 fn list_plans(data_dir: &Path) -> Result<()> {
-    let workspace = load_workspace(data_dir)?;
+    let workspace = load_workspace(&data_dir)?;
     validate_workspace(&workspace)?;
     print_plan_list(&workspace.global.plans, &workspace.plans);
     Ok(())
@@ -947,6 +968,53 @@ fn load_plan_by_id(data_dir: &Path, plan_id: &str) -> Result<(String, Plan)> {
     let global = load_global(data_dir)?;
     let entry = find_plan_entry(&global, plan_id)?;
     Ok((entry.file.clone(), load_plan(data_dir, &entry.file)?))
+}
+
+fn load_run_target(data_dir: Option<&PathBuf>, target: &str) -> Result<Plan> {
+    if looks_like_plan_file(target) {
+        let plan_path = PathBuf::from(target);
+        let plan = load_standalone_plan(&plan_path)?;
+        return Ok(plan);
+    }
+
+    let data_dir = resolve_data_dir(data_dir);
+    let workspace = load_workspace(&data_dir)?;
+    validate_workspace(&workspace)?;
+    Ok(find_plan(&workspace.plans, target)?.clone())
+}
+
+fn load_standalone_plan(plan_path: &Path) -> Result<Plan> {
+    let text = fs::read_to_string(plan_path)?;
+    let text = text.trim_start_matches('\u{feff}');
+    let plan: Plan = serde_json::from_str(text)?;
+    validate_standalone_plan(&plan)?;
+    Ok(plan)
+}
+
+fn validate_standalone_plan(plan: &Plan) -> Result<()> {
+    if plan.version != launcher_core::PLAN_SCHEMA_VERSION {
+        return Err(validation_error(format!(
+            "plan {} version must be {}, got {}",
+            plan.id,
+            launcher_core::PLAN_SCHEMA_VERSION,
+            plan.version
+        )));
+    }
+    if plan.id.trim().is_empty() {
+        return Err(validation_error("plan id cannot be empty"));
+    }
+    if plan.name.trim().is_empty() {
+        return Err(validation_error(format!("plan {} has empty name", plan.id)));
+    }
+    Ok(())
+}
+
+fn looks_like_plan_file(target: &str) -> bool {
+    let path = Path::new(target);
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        || path.exists()
 }
 
 fn find_plan<'a>(plans: &'a [Plan], plan_id: &str) -> Result<&'a Plan> {
@@ -1064,4 +1132,44 @@ fn print_report_summary(report: &ExecutionReport) {
 
 fn validation_error(message: impl Into<String>) -> Box<dyn std::error::Error> {
     LauncherError::Validation(message.into()).into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn standalone_plan_requires_schema_version_and_name() {
+        let ok = Plan {
+            version: launcher_core::PLAN_SCHEMA_VERSION,
+            id: "demo".to_string(),
+            name: "Demo".to_string(),
+            sequence: Vec::new(),
+        };
+        assert!(validate_standalone_plan(&ok).is_ok());
+
+        let bad_version = Plan {
+            version: 999,
+            ..ok.clone()
+        };
+        assert!(validate_standalone_plan(&bad_version).is_err());
+
+        let bad_name = Plan {
+            name: "   ".to_string(),
+            ..ok
+        };
+        assert!(validate_standalone_plan(&bad_name).is_err());
+    }
+
+    #[test]
+    fn json_extension_is_treated_as_plan_file_target() {
+        assert!(looks_like_plan_file(r".\huizhou.json"));
+        assert!(!looks_like_plan_file("demo"));
+    }
+
+    #[test]
+    fn standalone_json_target_does_not_need_workspace_id_shape() {
+        assert!(looks_like_plan_file("demo.json"));
+        assert!(!looks_like_plan_file("demo"));
+    }
 }

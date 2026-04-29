@@ -322,6 +322,7 @@ mod tests {
                 value: command.to_string(),
                 shell: Default::default(),
                 working_dir: None,
+                background: false,
             },
             pre_delay_ms: 0,
             post_delay_ms: 0,
