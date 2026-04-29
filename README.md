@@ -1,42 +1,82 @@
 # Rust Launcher
 
-> Windows-first native launcher for plans, groups, and launch items. JSON on disk, CLI for automation, Slint GUI for daily use.
+<p align="center">
+  <img src="docs/assets/readme/gui-workbench.png" alt="Rust Launcher GUI" width="100%" />
+</p>
 
-![GUI workbench](docs/assets/readme/gui-workbench.png)
+<p align="center">
+  <strong>JSON-driven Rust launcher for plans, groups, and launch items.</strong><br />
+  <strong>适合把文件、程序、网址、命令整理成一键启动方案的原生 Rust 启动器。</strong>
+</p>
 
-![Rust](https://img.shields.io/badge/Rust-2021-f46623?style=flat-square)
-![Platform](https://img.shields.io/badge/platform-Windows%20first-2563eb?style=flat-square)
-![Storage](https://img.shields.io/badge/storage-JSON-16a34a?style=flat-square)
-![GUI](https://img.shields.io/badge/GUI-Slint-7c3aed?style=flat-square)
+<p align="center">
+  <img src="https://img.shields.io/badge/Rust-2021-f46623?style=flat-square" alt="Rust 2021" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20first-2563eb?style=flat-square" alt="Windows first" />
+  <img src="https://img.shields.io/badge/Storage-JSON-16a34a?style=flat-square" alt="JSON storage" />
+  <img src="https://img.shields.io/badge/GUI-Slint-0f766e?style=flat-square" alt="Slint GUI" />
+  <img src="https://img.shields.io/badge/CLI-Automation-1d4ed8?style=flat-square" alt="CLI automation" />
+</p>
+
+<p align="center">
+  <a href="#中文版">中文版</a> ·
+  <a href="#english">English</a>
+</p>
+
+---
 
 ## 中文版
 
-Rust Launcher 是一个原生 Rust 快速启动器：你可以把文件夹、文档、程序、音乐、网页、命令组合成“方案”，再按顺序一键启动。它的组织结构很直接：
+### 项目简介
+
+Rust Launcher 是一个 Windows 优先的原生启动器。它把你的工作环境拆成清晰的三层结构：
 
 ```text
 方案 Plan
   组 Group
-    单个启动项 Item
-  单个启动项 Item
+    启动项 Item
+  启动项 Item
 ```
 
-数据全部存为 JSON 文本。CLI 适合验证、批量编辑、脚本化和 dry-run；GUI 适合日常查看、编辑和真实运行方案。
+你可以把文件夹、程序、网址、命令行任务整理进一个方案里，再按顺序执行。所有配置都以 JSON 存储在磁盘上，CLI 适合自动化和批量维护，GUI 适合日常浏览、编辑和启动。
 
-### 当前能力
+### 核心亮点
 
-- Windows 优先：文件、文件夹、媒体、URL 使用系统默认方式打开。
-- Windows 下尽量静默：`path/url` 直接走系统 Shell 打开，`command` 默认隐藏启动器产生的控制台窗口。
-- JSON 持久化：`global.json` 管方案目录、启用状态、触发方式和定时；每个方案一个独立 JSON。
-- 顺序编排：方案内按顺序执行，组内按顺序执行。
-- 延迟控制：组和单个启动项均支持前置/后置延迟。
-- 失败策略：每个启动项支持 `continue` 或 `stop`。
-- CLI 完整管理：方案、启动方式、定时、组、单个启动项、排序、导入导出。
-- GUI 工作台：方案列表、结构树、属性面板、启动方式、JSON 信息、执行日志。
-- GUI 不提供 dry-run：点击“运行方案”会真实执行；dry-run 只在 CLI 中使用。
+- JSON 持久化，所有配置都可以直接看见、导出、导入和版本管理。
+- 原生 Rust CLI，适合验证、dry-run、脚本化和批量编辑。
+- Slint GUI，适合可视化查看方案结构、属性、启动方式和执行日志。
+- 支持顺序执行、分组执行、前后延迟和失败策略。
+- 支持手动启动、应用启动自动触发，以及 daily/weekly/once 定时规则。
+- Windows 下对路径、URL、程序和命令做了针对性的启动适配。
+
+### 功能总览
+
+| 能力 | 说明 |
+| --- | --- |
+| 方案管理 | 新建、重命名、删除、启用、禁用、导入、导出、排序 |
+| 组管理 | 创建组、编辑组、删除组、控制前后延迟和失败策略 |
+| 启动项管理 | 支持 `path`、`program`、`url`、`command` 四类目标 |
+| 启动控制 | 整个方案运行、单项运行、dry-run 预演 |
+| 触发方式 | `manual` / `auto` |
+| 定时调度 | `daily` / `weekly` / `once` |
+| 数据组织 | `global.json` 记录目录与触发规则；每个方案独立 JSON |
+
+### 截图预览
+
+#### GUI 工作台
+
+![Rust Launcher GUI](docs/assets/readme/gui-workbench.png)
+
+#### CLI 命令总览
+
+![Rust Launcher CLI Overview](docs/assets/readme/cli-overview.png)
+
+#### CLI 运行与编辑示例
+
+![Rust Launcher CLI Run And Edit](docs/assets/readme/cli-run-and-edit.png)
 
 ### 数据目录
 
-默认数据目录在程序所在目录旁边创建和读取：
+默认情况下，程序会在可执行文件旁边读取或创建 `data/` 目录：
 
 ```text
 launcher.exe
@@ -47,10 +87,12 @@ data/
     demo.json
 ```
 
-开发时如果从 workspace 运行，常用目录是项目根目录下的 `data/`；如果直接运行 `target\debug\launcher-gui.exe`，则会使用 `target\debug\data\`。CLI 可以用全局参数覆盖：
+开发阶段如果直接从 workspace 运行，常见位置是项目根目录下的 `data/`。如果直接双击 `target\debug\launcher-gui.exe`，默认数据目录通常会变成 `target\debug\data\`。
+
+CLI 可以用全局参数覆盖数据目录：
 
 ```powershell
-.\launcher.exe --data-dir .\data validate
+.\target\debug\launcher.exe --data-dir .\data validate
 ```
 
 ### 快速开始
@@ -67,32 +109,34 @@ cargo build --workspace
 
 ### GUI 用法
 
-![GUI usage](docs/assets/readme/gui-workbench.png)
+GUI 面向“日常使用”和“可视化维护”。推荐使用流程：
 
 1. 启动 `launcher-gui.exe`。
-2. 左侧选择方案；方案多时列表可滚动，也可以使用搜索框过滤。
-3. 中间查看方案结构：组和单个启动项会按执行顺序展示。
-4. 点击方案、组或单个启动项，右侧属性面板会同步显示详细信息。
-5. 在右侧查看启动方式、定时数量和 JSON 存储路径。
-6. 点击顶部“运行方案”真实执行当前方案。
-7. 底部日志区会追加每个启动项的执行结果和错误信息。
-8. 新建、重命名、删除、导入、组和启动项编辑等入口用于维护 JSON 配置；保存前会经过核心校验。
+2. 在左侧方案栏选择一个方案，也可以通过搜索框过滤方案与启动项。
+3. 在中间结构区查看组与启动项的顺序关系。
+4. 点击任意方案、组或启动项，右侧检查器会同步展示属性与启动方式。
+5. 通过右上角的“运行方案”按钮真实执行当前方案。
+6. 在底部执行日志里查看每个启动项的成功、失败和汇总结果。
+7. 通过新建方案、导入方案、新增启动项、编辑节点、定时面板等入口维护 JSON 配置。
 
-### CLI 截图
+GUI 当前覆盖的重点能力：
 
-![CLI command overview](docs/assets/readme/cli-overview.png)
-
-![CLI run and edit examples](docs/assets/readme/cli-run-and-edit.png)
+- 方案浏览与搜索
+- 方案新建、重命名、删除、导入、导出、启用禁用、排序
+- 启动项与组的新增、编辑、删除、移动
+- 启动方式切换
+- 定时规则编辑
+- 执行日志展示
 
 ### CLI 完整用法
 
-所有命令都支持全局参数 `--data-dir <DATA_DIR>`，位置在子命令前：
+所有命令都支持把全局参数写在子命令前：
 
 ```powershell
-.\launcher.exe --data-dir .\data <COMMAND>
+.\target\debug\launcher.exe --data-dir .\data <COMMAND>
 ```
 
-基础命令：
+#### 顶层命令
 
 ```text
 launcher validate
@@ -101,9 +145,15 @@ launcher run <PLAN_ID> [--dry-run]
 launcher run-item <PLAN_ID> <ITEM_ID> [--dry-run]
 launcher daemon
 launcher new-plan <ID> <NAME>
+launcher plan <SUBCOMMAND>
+launcher launch <SUBCOMMAND>
+launcher schedule <SUBCOMMAND>
+launcher sequence <SUBCOMMAND>
+launcher group <SUBCOMMAND>
+launcher item <SUBCOMMAND>
 ```
 
-方案管理：
+#### 方案管理
 
 ```text
 launcher plan list
@@ -117,14 +167,14 @@ launcher plan export <ID> <OUTPUT_PATH>
 launcher plan import <SOURCE_PATH> [--overwrite]
 ```
 
-启动方式：
+#### 启动方式
 
 ```text
 launcher launch show <PLAN_ID>
 launcher launch set <PLAN_ID> <manual|auto>
 ```
 
-定时：
+#### 定时调度
 
 ```text
 launcher schedule list <PLAN_ID>
@@ -134,20 +184,22 @@ launcher schedule add-once <PLAN_ID> <AT>
 launcher schedule remove <PLAN_ID> <INDEX>
 ```
 
-顺序：
+#### 顶层顺序调整
 
 ```text
 launcher sequence list <PLAN_ID>
 launcher sequence move <PLAN_ID> <NODE_ID> <top|up|down|bottom>
 ```
 
-组：
+#### 组管理
 
 ```text
 launcher group add <PLAN_ID> <ID> <NAME> [--description <TEXT>] [--pre-delay-ms <MS>] [--post-delay-ms <MS>] [--on-failure <continue|stop>]
 launcher group edit <PLAN_ID> <GROUP_ID> [--name <NAME>] [--description <TEXT>] [--pre-delay-ms <MS>] [--post-delay-ms <MS>] [--on-failure <continue|stop>]
 launcher group delete <PLAN_ID> <GROUP_ID> [--keep-items]
 ```
+
+#### 启动项管理
 
 新增启动项：
 
@@ -158,7 +210,7 @@ launcher item add-url <PLAN_ID> <ID> <NAME> <VALUE> [--group <GROUP_ID>] [--desc
 launcher item add-command <PLAN_ID> <ID> <NAME> <VALUE> [--shell <power-shell|cmd|sh>] [--working-dir <DIR>] [--group <GROUP_ID>] [--description <TEXT>] [--pre-delay-ms <MS>] [--post-delay-ms <MS>] [--on-failure <continue|stop>]
 ```
 
-编辑启动项：
+编辑与移动启动项：
 
 ```text
 launcher item edit <PLAN_ID> <ITEM_ID> [--name <NAME>] [--description <TEXT>] [--pre-delay-ms <MS>] [--post-delay-ms <MS>] [--on-failure <continue|stop>]
@@ -172,21 +224,22 @@ launcher item move-to-root <PLAN_ID> <ITEM_ID>
 launcher item delete <PLAN_ID> <ITEM_ID>
 ```
 
-常用示例：
+### CLI 常用示例
 
 ```powershell
-.\launcher.exe --data-dir .\data plan new work "工作方案"
-.\launcher.exe --data-dir .\data group add work dev "开发环境" --post-delay-ms 1000
-.\launcher.exe --data-dir .\data item add-path work project "项目目录" "D:\cache\runMain" --group dev
-.\launcher.exe --data-dir .\data item add-program work editor "编辑器" "C:\Users\me\AppData\Local\Programs\Microsoft VS Code\Code.exe" --arg "D:\cache\runMain"
-.\launcher.exe --data-dir .\data item add-url work docs "参考文档" "https://www.rust-lang.org"
-.\launcher.exe --data-dir .\data run work --dry-run
-.\launcher.exe --data-dir .\data run work
+.\target\debug\launcher.exe --data-dir .\data plan new work "工作方案"
+.\target\debug\launcher.exe --data-dir .\data group add work dev "开发环境" --post-delay-ms 1000
+.\target\debug\launcher.exe --data-dir .\data item add-path work project "项目目录" "D:\cache\runMain" --group dev
+.\target\debug\launcher.exe --data-dir .\data item add-program work editor "编辑器" "C:\Users\me\AppData\Local\Programs\Microsoft VS Code\Code.exe" --arg "D:\cache\runMain"
+.\target\debug\launcher.exe --data-dir .\data item add-url work docs "参考文档" "https://www.rust-lang.org"
+.\target\debug\launcher.exe --data-dir .\data item add-command work dev-server "开发服务器" "npm run dev" --group dev --shell power-shell --working-dir "D:\cache\runMain"
+.\target\debug\launcher.exe --data-dir .\data run work --dry-run
+.\target\debug\launcher.exe --data-dir .\data run work
 ```
 
-### JSON 结构
+### JSON 结构示例
 
-`global.json` 记录方案目录和启动规则：
+`global.json` 保存方案目录、启用状态和启动规则：
 
 ```json
 {
@@ -201,14 +254,16 @@ launcher item delete <PLAN_ID> <ITEM_ID>
       "id": "demo",
       "file": "plans/demo.json",
       "enabled": true,
-      "trigger": "manual",
-      "schedule": []
+      "launch": {
+        "trigger": "manual",
+        "schedules": []
+      }
     }
   ]
 }
 ```
 
-方案 JSON 记录结构和执行顺序：
+单个方案 JSON 保存执行结构：
 
 ```json
 {
@@ -229,7 +284,10 @@ launcher item delete <PLAN_ID> <ITEM_ID>
           "id": "project-folder",
           "name": "项目目录",
           "description": "",
-          "target": { "kind": "path", "value": "D:\\cache\\runMain" },
+          "target": {
+            "kind": "path",
+            "value": "D:\\cache\\runMain"
+          },
           "pre_delay_ms": 0,
           "post_delay_ms": 500,
           "on_failure": "continue"
@@ -253,33 +311,69 @@ cargo build --workspace
 
 ```text
 crates/
-  launcher-core/   JSON 模型、校验、调度、执行、平台启动适配
+  launcher-core/   JSON 模型、校验、调度、执行、平台适配
   launcher-cli/    命令行入口
-  launcher-gui/    Slint GUI
-data/              示例 JSON 数据
+  launcher-gui/    Slint 图形界面
+data/              示例数据
 docs/assets/       README 截图资源
-third_party/       GUI 中文文本渲染相关的本地补丁依赖
+third_party/       GUI 中文文本渲染相关补丁依赖
 ```
+
+---
 
 ## English
 
-Rust Launcher is a native Rust launcher for turning files, folders, programs, music, URLs, and shell commands into ordered launch plans. It stores everything as editable JSON and provides both a script-friendly CLI and a Slint desktop GUI.
+### Overview
 
-### What It Does
+Rust Launcher is a Windows-first native launcher written in Rust. It turns folders, apps, URLs, and shell commands into ordered launch plans with a clean three-level structure:
 
-- Opens paths, programs, URLs, and explicit shell commands.
-- Minimizes Windows console flashes by opening paths/URLs through the system shell and running `command` items without an extra launcher console window by default.
-- Stores global settings in `global.json` and each plan in its own JSON file.
-- Runs plan sequences in order, including groups and standalone items.
-- Supports pre/post delays on groups and items.
-- Supports per-item failure policy: `continue` or `stop`.
-- Provides a full CLI for validation, execution, editing, schedules, import, and export.
-- Provides a GUI workbench for browsing, editing, running, and reading execution logs.
-- Keeps dry-run in the CLI only; the GUI run button performs a real launch.
+```text
+Plan
+  Group
+    Item
+  Item
+```
+
+Everything is stored as plain JSON on disk. The CLI is great for automation, dry runs, and scripted edits. The Slint GUI is built for daily browsing, editing, and one-click execution.
+
+### Highlights
+
+- Plain JSON storage that is easy to inspect, export, import, and version.
+- Native Rust CLI for validation, dry-run preview, and batch editing.
+- Slint desktop GUI for plan browsing, editing, launch controls, and logs.
+- Ordered execution with groups, delays, and failure policy control.
+- Manual launch, auto-on-app-start launch, and `daily` / `weekly` / `once` schedules.
+- Windows-oriented launching behavior for paths, URLs, programs, and shell commands.
+
+### Feature Matrix
+
+| Area | What you get |
+| --- | --- |
+| Plan management | Create, rename, delete, enable, disable, import, export, reorder |
+| Group management | Add, edit, remove groups with delay and failure settings |
+| Item management | `path`, `program`, `url`, and `command` launch targets |
+| Execution | Run a full plan, run a single item, or preview with `--dry-run` |
+| Launch trigger | `manual` or `auto` |
+| Scheduling | `daily`, `weekly`, `once` |
+| Storage | `global.json` for catalog and triggers, one JSON file per plan |
+
+### Screenshots
+
+#### GUI Workbench
+
+![Rust Launcher GUI](docs/assets/readme/gui-workbench.png)
+
+#### CLI Overview
+
+![Rust Launcher CLI Overview](docs/assets/readme/cli-overview.png)
+
+#### CLI Run And Edit Example
+
+![Rust Launcher CLI Run And Edit](docs/assets/readme/cli-run-and-edit.png)
 
 ### Data Directory
 
-By default, both binaries use a `data/` folder next to the running executable:
+By default, the binaries read from or create a `data/` folder next to the executable:
 
 ```text
 launcher.exe
@@ -290,10 +384,12 @@ data/
     demo.json
 ```
 
-Override it in the CLI with:
+During development, running from the workspace usually means using the repository-level `data/` directory. Launching `target\debug\launcher-gui.exe` directly typically uses `target\debug\data\`.
+
+Override the CLI data directory with:
 
 ```powershell
-.\launcher.exe --data-dir .\data validate
+.\target\debug\launcher.exe --data-dir .\data validate
 ```
 
 ### Quick Start
@@ -310,32 +406,34 @@ cargo build --workspace
 
 ### GUI Guide
 
-![GUI workbench](docs/assets/readme/gui-workbench.png)
+The GUI is the best fit for everyday use and visual maintenance:
 
 1. Start `launcher-gui.exe`.
-2. Select a plan from the left sidebar; the list scrolls when many plans exist.
-3. Inspect the ordered plan tree in the center.
-4. Select a plan, group, or item to update the right-side inspector.
-5. Review launch trigger, schedules, and JSON storage details on the right.
-6. Click the top run button to launch the selected plan.
-7. Read item-level results in the bottom execution log.
-8. Use the editing actions to maintain plan JSON; saves are validated by the core library.
+2. Pick a plan from the left sidebar, or filter plans and items with the search box.
+3. Review the ordered plan structure in the center panel.
+4. Select a plan, group, or item to inspect its properties on the right.
+5. Use the top-right run button to execute the currently selected plan.
+6. Read success, failure, and summary output in the execution log area.
+7. Use the built-in actions for plan creation, import/export, item editing, group editing, and schedule maintenance.
 
-### CLI Screenshots
+Current GUI coverage includes:
 
-![CLI command overview](docs/assets/readme/cli-overview.png)
-
-![CLI run and edit examples](docs/assets/readme/cli-run-and-edit.png)
+- Plan browsing and search
+- Create, rename, delete, import, export, enable, disable, and reorder plans
+- Add, edit, delete, and move groups and items
+- Launch trigger switching
+- Schedule editing
+- Execution log viewing
 
 ### Complete CLI Reference
 
-Global option:
+All commands accept the global option before the subcommand:
 
 ```powershell
-.\launcher.exe --data-dir .\data <COMMAND>
+.\target\debug\launcher.exe --data-dir .\data <COMMAND>
 ```
 
-Core commands:
+#### Top-Level Commands
 
 ```text
 launcher validate
@@ -344,9 +442,15 @@ launcher run <PLAN_ID> [--dry-run]
 launcher run-item <PLAN_ID> <ITEM_ID> [--dry-run]
 launcher daemon
 launcher new-plan <ID> <NAME>
+launcher plan <SUBCOMMAND>
+launcher launch <SUBCOMMAND>
+launcher schedule <SUBCOMMAND>
+launcher sequence <SUBCOMMAND>
+launcher group <SUBCOMMAND>
+launcher item <SUBCOMMAND>
 ```
 
-Plan management:
+#### Plan Commands
 
 ```text
 launcher plan list
@@ -360,14 +464,14 @@ launcher plan export <ID> <OUTPUT_PATH>
 launcher plan import <SOURCE_PATH> [--overwrite]
 ```
 
-Launch modes:
+#### Launch Trigger Commands
 
 ```text
 launcher launch show <PLAN_ID>
 launcher launch set <PLAN_ID> <manual|auto>
 ```
 
-Schedules:
+#### Schedule Commands
 
 ```text
 launcher schedule list <PLAN_ID>
@@ -377,14 +481,14 @@ launcher schedule add-once <PLAN_ID> <AT>
 launcher schedule remove <PLAN_ID> <INDEX>
 ```
 
-Sequence:
+#### Sequence Commands
 
 ```text
 launcher sequence list <PLAN_ID>
 launcher sequence move <PLAN_ID> <NODE_ID> <top|up|down|bottom>
 ```
 
-Groups:
+#### Group Commands
 
 ```text
 launcher group add <PLAN_ID> <ID> <NAME> [--description <TEXT>] [--pre-delay-ms <MS>] [--post-delay-ms <MS>] [--on-failure <continue|stop>]
@@ -392,13 +496,20 @@ launcher group edit <PLAN_ID> <GROUP_ID> [--name <NAME>] [--description <TEXT>] 
 launcher group delete <PLAN_ID> <GROUP_ID> [--keep-items]
 ```
 
-Items:
+#### Item Commands
+
+Create items:
 
 ```text
 launcher item add-path <PLAN_ID> <ID> <NAME> <VALUE> [--group <GROUP_ID>] [--description <TEXT>] [--pre-delay-ms <MS>] [--post-delay-ms <MS>] [--on-failure <continue|stop>]
 launcher item add-program <PLAN_ID> <ID> <NAME> <VALUE> [--arg <ARG>]... [--working-dir <DIR>] [--group <GROUP_ID>] [--description <TEXT>] [--pre-delay-ms <MS>] [--post-delay-ms <MS>] [--on-failure <continue|stop>]
 launcher item add-url <PLAN_ID> <ID> <NAME> <VALUE> [--group <GROUP_ID>] [--description <TEXT>] [--pre-delay-ms <MS>] [--post-delay-ms <MS>] [--on-failure <continue|stop>]
 launcher item add-command <PLAN_ID> <ID> <NAME> <VALUE> [--shell <power-shell|cmd|sh>] [--working-dir <DIR>] [--group <GROUP_ID>] [--description <TEXT>] [--pre-delay-ms <MS>] [--post-delay-ms <MS>] [--on-failure <continue|stop>]
+```
+
+Update, move, and delete items:
+
+```text
 launcher item edit <PLAN_ID> <ITEM_ID> [--name <NAME>] [--description <TEXT>] [--pre-delay-ms <MS>] [--post-delay-ms <MS>] [--on-failure <continue|stop>]
 launcher item target-path <PLAN_ID> <ITEM_ID> <VALUE>
 launcher item target-program <PLAN_ID> <ITEM_ID> <VALUE> [--arg <ARG>]... [--working-dir <DIR>]
@@ -408,6 +519,80 @@ launcher item move <PLAN_ID> <ITEM_ID> <top|up|down|bottom>
 launcher item move-to-group <PLAN_ID> <ITEM_ID> <GROUP_ID>
 launcher item move-to-root <PLAN_ID> <ITEM_ID>
 launcher item delete <PLAN_ID> <ITEM_ID>
+```
+
+### Common CLI Examples
+
+```powershell
+.\target\debug\launcher.exe --data-dir .\data plan new work "Work Setup"
+.\target\debug\launcher.exe --data-dir .\data group add work dev "Development Stack" --post-delay-ms 1000
+.\target\debug\launcher.exe --data-dir .\data item add-path work project "Project Folder" "D:\cache\runMain" --group dev
+.\target\debug\launcher.exe --data-dir .\data item add-program work editor "Editor" "C:\Users\me\AppData\Local\Programs\Microsoft VS Code\Code.exe" --arg "D:\cache\runMain"
+.\target\debug\launcher.exe --data-dir .\data item add-url work docs "Reference Docs" "https://www.rust-lang.org"
+.\target\debug\launcher.exe --data-dir .\data item add-command work dev-server "Dev Server" "npm run dev" --group dev --shell power-shell --working-dir "D:\cache\runMain"
+.\target\debug\launcher.exe --data-dir .\data run work --dry-run
+.\target\debug\launcher.exe --data-dir .\data run work
+```
+
+### JSON Examples
+
+`global.json` stores plan catalog entries and launch behavior:
+
+```json
+{
+  "version": 2,
+  "globals": {
+    "default_pre_delay_ms": 0,
+    "default_post_delay_ms": 0,
+    "log_retention_days": 14
+  },
+  "plans": [
+    {
+      "id": "demo",
+      "file": "plans/demo.json",
+      "enabled": true,
+      "launch": {
+        "trigger": "manual",
+        "schedules": []
+      }
+    }
+  ]
+}
+```
+
+Each plan JSON stores the ordered execution graph:
+
+```json
+{
+  "version": 2,
+  "id": "demo",
+  "name": "Demo Plan",
+  "sequence": [
+    {
+      "kind": "group",
+      "id": "dev",
+      "name": "Development Stack",
+      "description": "Open working directories and tools",
+      "pre_delay_ms": 0,
+      "post_delay_ms": 1000,
+      "on_failure": "continue",
+      "items": [
+        {
+          "id": "project-folder",
+          "name": "Project Folder",
+          "description": "",
+          "target": {
+            "kind": "path",
+            "value": "D:\\cache\\runMain"
+          },
+          "pre_delay_ms": 0,
+          "post_delay_ms": 500,
+          "on_failure": "continue"
+        }
+      ]
+    }
+  ]
+}
 ```
 
 ### Development Checks
@@ -424,9 +609,9 @@ cargo build --workspace
 ```text
 crates/
   launcher-core/   JSON models, validation, scheduler, execution, platform adapters
-  launcher-cli/    Command-line interface
+  launcher-cli/    Command-line entry point
   launcher-gui/    Slint desktop UI
-data/              Example JSON data
-docs/assets/       README screenshots
+data/              Example data
+docs/assets/       README screenshot assets
 third_party/       Local dependency patch for Chinese GUI text rendering
 ```
