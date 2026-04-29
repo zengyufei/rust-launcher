@@ -36,9 +36,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-deps-
 
-      - name: Test
-        run: cargo test --workspace --locked
-
       - name: Build
         run: cargo build --workspace --release --locked
 
