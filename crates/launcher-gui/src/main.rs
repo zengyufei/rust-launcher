@@ -14,10 +14,10 @@ use launcher_core::{
     duplicate_root_item, execute_plan_with_progress, export_plan, import_plan, load_workspace,
     move_plan, move_sequence_node, replace_item, set_plan_enabled, set_plan_launch_trigger,
     ungroup, update_group, update_item, update_plan_identity, update_plan_schedule,
-    validate_workspace, ExecuteOptions, ExecutionReport, FailurePolicy, Group, GroupUpdate,
-    ItemExecution, ItemUpdate, LaunchItem, LaunchTarget, LaunchTrigger, LauncherError,
-    NodeMoveDirection, Plan, PlanCatalogEntry, PlanMoveDirection, ScheduleRule, Scheduler,
-    SequenceNode, Weekday, Workspace,
+    validate_workspace, execute_single_item_with_progress, ExecuteOptions, ExecutionReport,
+    FailurePolicy, Group, GroupUpdate, ItemExecution, ItemUpdate, LaunchItem, LaunchTarget,
+    LaunchTrigger, LauncherError, NodeMoveDirection, Plan, PlanCatalogEntry, PlanMoveDirection,
+    ScheduleRule, Scheduler, SequenceNode, Weekday, Workspace,
 };
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
@@ -1276,6 +1276,10 @@ fn handle_bulk_action(app: &AppWindow, state: &Arc<Mutex<GuiState>>, action: &Sh
         open_combine_group_modal(app, state);
         return;
     }
+    if action.as_str() == "执行" {
+        start_selected_item_run(app, state);
+        return;
+    }
 
     mutate_structure_direct(app, state, action.as_str(), |guard| {
         let plan_id = selected_plan_id_for_mutation(guard)?;
@@ -1611,16 +1615,20 @@ fn selected_single_root_item_id(state: &GuiState) -> launcher_core::Result<Strin
     let ids = selected_root_ids_in_plan_order(state)?;
     if ids.len() != 1 {
         return Err(launcher_core::LauncherError::Validation(
-            "复制只支持单个根层级启动项".to_string(),
+            "当前操作只支持单个根层级启动项".to_string(),
         ));
     }
     let item_id = ids[0].clone();
     if root_node_kind(state, &item_id)? != "item" {
         return Err(launcher_core::LauncherError::Validation(
-            "复制只支持单个根层级启动项".to_string(),
+            "当前操作只支持单个根层级启动项".to_string(),
         ));
     }
     Ok(item_id)
+}
+
+fn can_run_selection(state: &GuiState) -> bool {
+    selected_single_root_item_id(state).is_ok() && !state.running
 }
 
 fn can_copy_selection(state: &GuiState) -> bool {
@@ -2134,6 +2142,7 @@ fn render(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
         &state.selected_node_ids,
     )));
     app.set_has_selection(!state.selected_node_ids.is_empty());
+    app.set_can_run_selection(can_run_selection(&state));
     app.set_can_copy_selection(can_copy_selection(&state));
     app.set_selection_summary(selection_summary(&state.selected_node_ids));
     app.set_launch_rows(model_from(launch_rows(selected_entry)));
@@ -2229,6 +2238,82 @@ fn start_run(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
     });
 }
 
+fn start_selected_item_run(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
+    let selection_to_run = {
+        let guard = state.lock().expect("GUI state lock poisoned");
+        if guard.running {
+            return;
+        }
+        let Some(workspace) = guard.workspace.as_ref() else {
+            drop(guard);
+            append_log(state, "error", "没有已加载的工作区");
+            render(app, state);
+            return;
+        };
+        let Some(plan_id) = selected_plan_id(&guard, workspace) else {
+            drop(guard);
+            append_log(state, "error", "没有选中的方案");
+            render(app, state);
+            return;
+        };
+        match selected_single_root_item_id(&guard) {
+            Ok(item_id) => Some((plan_id.to_string(), item_id)),
+            Err(error) => {
+                drop(guard);
+                append_log(state, "error", format!("执行启动项失败: {error}"));
+                render(app, state);
+                None
+            }
+        }
+    };
+    let Some((plan_id, item_id)) = selection_to_run else {
+        return;
+    };
+
+    {
+        let mut state = state.lock().expect("GUI state lock poisoned");
+        state.running = true;
+        state.logs.push(log_row(
+            "info",
+            format!("开始执行启动项: {plan_id}/{item_id}"),
+        ));
+    }
+    render(app, state);
+
+    let weak = app.as_weak();
+    let state = Arc::clone(state);
+    thread::spawn(move || {
+        let result = run_single_item_by_id(&plan_id, &item_id, {
+            let weak = weak.clone();
+            let state = Arc::clone(&state);
+            move |item| {
+                let weak = weak.clone();
+                let state = Arc::clone(&state);
+                let item = item.clone();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak.upgrade() {
+                        append_item_log(&state, &item);
+                        render(&app, &state);
+                    }
+                });
+            }
+        });
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(app) = weak.upgrade() {
+                {
+                    let mut state = state.lock().expect("GUI state lock poisoned");
+                    state.running = false;
+                    state.selected_plan_id = Some(plan_id.clone());
+                    state.selected_node_ids = vec![item_id.clone()];
+                    state.logs.extend(item_report_summary_logs(&plan_id, &item_id, result));
+                }
+                load_workspace_into_state(&state);
+                render(&app, &state);
+            }
+        });
+    });
+}
+
 fn run_plan_by_id<F>(plan_id: &str, on_item: F) -> std::result::Result<ExecutionReport, String>
 where
     F: FnMut(&ItemExecution),
@@ -2250,6 +2335,30 @@ where
         ExecuteOptions { dry_run: false },
         on_item,
     ))
+}
+
+fn run_single_item_by_id<F>(
+    plan_id: &str,
+    item_id: &str,
+    on_item: F,
+) -> std::result::Result<ExecutionReport, String>
+where
+    F: FnMut(&ItemExecution),
+{
+    let data_dir = default_data_dir();
+    let workspace = load_workspace(&data_dir)
+        .and_then(|workspace| {
+            validate_workspace(&workspace)?;
+            Ok(workspace)
+        })
+        .map_err(|error| error.to_string())?;
+    let plan = workspace
+        .plans
+        .iter()
+        .find(|plan| plan.id == plan_id)
+        .ok_or_else(|| format!("方案不存在: {plan_id}"))?;
+    execute_single_item_with_progress(plan, item_id, ExecuteOptions { dry_run: false }, on_item)
+        .map_err(|error| error.to_string())
 }
 
 fn start_scheduler_loop(app: &AppWindow, state: &Arc<Mutex<GuiState>>) {
@@ -2402,6 +2511,36 @@ fn report_summary_logs(result: std::result::Result<ExecutionReport, String>) -> 
             )]
         }
         Err(error) => vec![log_row("error", format!("运行失败: {error}"))],
+    }
+}
+
+fn item_report_summary_logs(
+    plan_id: &str,
+    item_id: &str,
+    result: std::result::Result<ExecutionReport, String>,
+) -> Vec<LogRow> {
+    match result {
+        Ok(report) => {
+            vec![log_row(
+                if report.failure_count() == 0 {
+                    "info"
+                } else {
+                    "error"
+                },
+                format!(
+                    "执行完成: 方案={} 启动项={} 成功={} 失败={} 已停止={}",
+                    plan_id,
+                    item_id,
+                    report.success_count(),
+                    report.failure_count(),
+                    report.stopped
+                ),
+            )]
+        }
+        Err(error) => vec![log_row(
+            "error",
+            format!("执行启动项失败: 方案={} 启动项={} {error}", plan_id, item_id),
+        )],
     }
 }
 

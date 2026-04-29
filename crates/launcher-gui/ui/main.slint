@@ -27,6 +27,7 @@ export component AppWindow inherits Window {
     in property <[PlanRow]> plan-rows;
     in property <[SequenceRow]> sequence-rows;
     in property <bool> has-selection;
+    in property <bool> can-run-selection;
     in property <bool> can-copy-selection;
     in property <string> selection-summary;
     in property <[InspectorRow]> launch-rows;
@@ -191,6 +192,7 @@ export component AppWindow inherits Window {
                 selected-plan-title: root.selected-plan-title;
                 selected-plan-file: root.selected-plan-file;
                 has-selection: root.has-selection;
+                can-run-selection: root.can-run-selection;
                 can-copy-selection: root.can-copy-selection;
                 selection-summary: root.selection-summary;
                 sequence-rows: root.sequence-rows;
