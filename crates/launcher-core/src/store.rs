@@ -89,7 +89,13 @@ pub fn load_workspace(data_dir: &Path) -> Result<Workspace> {
 }
 
 pub fn load_global(data_dir: &Path) -> Result<GlobalConfig> {
-    read_json(&data_dir.join("global.json"))
+    let path = data_dir.join("global.json");
+    if !path.exists() {
+        let global = default_global_config();
+        write_json(&path, &global)?;
+        return Ok(global);
+    }
+    read_json(&path)
 }
 
 pub fn save_global(data_dir: &Path, global: &GlobalConfig) -> Result<()> {
@@ -122,15 +128,7 @@ pub fn create_plan_with_file(
     }
     validate_relative_file(relative_file)?;
 
-    let mut global = if data_dir.join("global.json").exists() {
-        load_global(data_dir)?
-    } else {
-        GlobalConfig {
-            version: GLOBAL_SCHEMA_VERSION,
-            globals: Default::default(),
-            plans: Vec::new(),
-        }
-    };
+    let mut global = load_global(data_dir)?;
 
     if global.plans.iter().any(|plan| plan.id == id) {
         return Err(LauncherError::Validation(format!(
@@ -171,15 +169,7 @@ pub fn import_plan(data_dir: &Path, source_path: &Path, overwrite: bool) -> Resu
     let plan: Plan = read_json(source_path)?;
     validate_plan(&plan)?;
 
-    let mut global = if data_dir.join("global.json").exists() {
-        load_global(data_dir)?
-    } else {
-        GlobalConfig {
-            version: GLOBAL_SCHEMA_VERSION,
-            globals: Default::default(),
-            plans: Vec::new(),
-        }
-    };
+    let mut global = load_global(data_dir)?;
 
     if let Some(entry) = global.plans.iter().find(|entry| entry.id == plan.id) {
         if !overwrite {
@@ -1035,6 +1025,14 @@ where
     })
 }
 
+fn default_global_config() -> GlobalConfig {
+    GlobalConfig {
+        version: GLOBAL_SCHEMA_VERSION,
+        globals: Default::default(),
+        plans: Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1172,6 +1170,20 @@ mod tests {
         let workspace = load_workspace(data_dir.path()).unwrap();
         validate_workspace(&workspace).unwrap();
         assert_eq!(workspace.plans[0].id, "work");
+    }
+
+    #[test]
+    fn load_global_creates_default_file_when_missing() {
+        let data_dir = tempfile::tempdir().unwrap();
+
+        let global = load_global(data_dir.path()).unwrap();
+        let saved = fs::read_to_string(data_dir.path().join("global.json")).unwrap();
+
+        assert_eq!(global, default_global_config());
+        assert_eq!(
+            saved,
+            "{\n  \"version\": 2,\n  \"globals\": {\n    \"default_pre_delay_ms\": 0,\n    \"default_post_delay_ms\": 0,\n    \"log_retention_days\": 14\n  },\n  \"plans\": []\n}\n"
+        );
     }
 
     #[test]
